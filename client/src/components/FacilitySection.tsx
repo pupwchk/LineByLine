@@ -65,6 +65,7 @@ export function FacilitySection({
             corner={corner}
             facility={facility}
             onRegister={onRegister}
+            onViewDetail={onViewDetail}
             disabled={hasActiveWaiting || isFutureDate}
             isFutureDate={isFutureDate}
             isPrediction={isPrediction}

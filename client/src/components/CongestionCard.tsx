@@ -10,6 +10,7 @@ interface CongestionCardProps {
   corner: Corner;
   facility: Facility;
   onRegister: (corner: Corner, facility: Facility) => void;
+  onViewDetail?: (facility: Facility) => void;
   disabled?: boolean;
   isFutureDate?: boolean;
   isPrediction?: boolean;
@@ -19,6 +20,7 @@ export function CongestionCard({
   corner, 
   facility, 
   onRegister, 
+  onViewDetail,
   disabled,
   isFutureDate = false,
   isPrediction = false,
@@ -32,6 +34,7 @@ export function CongestionCard({
   return (
     <Card 
       className="transition-all duration-200 hover:shadow-md cursor-pointer border-card-border"
+      onClick={() => onViewDetail?.(facility)}
       data-testid={`card-corner-${corner.id}`}
     >
       <CardContent className="p-4">

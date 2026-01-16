@@ -35,6 +35,7 @@ export const cornerSchema = z.object({
   currentQueue: z.number(),
   available: z.number().optional(),
   capacity: z.number().optional(),
+  operatingHours: z.string().optional(),
 });
 export type Corner = z.infer<typeof cornerSchema>;
 
