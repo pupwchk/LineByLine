@@ -68,6 +68,9 @@ Preferred communication style: Simple, everyday language.
 3. **SEO Implementation:** Added Open Graph and Twitter Card meta tags, per-page title/description updates via custom hooks
 4. **UI Compliance:** Removed custom hover styles, using shadcn Button with built-in interactions
 5. **Accessibility:** Added data-testid attributes to all interactive elements
+6. **Time Slot Predictions:** Added TimeSlotSelector component showing 30-minute interval time slots (6:00-22:00), with prediction mode for future time slots showing calculated congestion/wait times
+7. **Date-Aware Menu Display:** Future dates show "[음식메뉴] - 추후구현" placeholder with "가격 미정" pricing; registration disabled with "예약 불가" button
+8. **Prediction System:** client/src/lib/prediction.ts contains multiplier-based calculations for congestion and wait time predictions based on peak hours (11-13, 17-19 higher; 7-9, 14-16 lower)
 
 ## External Dependencies
 
