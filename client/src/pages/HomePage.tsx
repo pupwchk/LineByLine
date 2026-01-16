@@ -13,7 +13,7 @@ import { useDocumentTitle, useMetaDescription } from "@/hooks/useDocumentTitle";
 import { getPredictedFacility, shouldShowPrediction, isMealTime, getMealPeriodName } from "@/lib/prediction";
 import { format, isToday } from "date-fns";
 import { ko } from "date-fns/locale";
-import { Utensils, BookOpen, Dumbbell, Building, RefreshCw, TrendingUp } from "lucide-react";
+import { Utensils, BookOpen, Dumbbell, Building, RefreshCw, TrendingUp, LayoutGrid } from "lucide-react";
 import type { Corner, Facility } from "@shared/schema";
 
 interface HomePageProps {
@@ -83,7 +83,7 @@ export function HomePage({ selectedDate, onNavigateToWaiting, onNavigateToDetail
   };
 
   const tabItems = [
-    { value: "all", label: "전체", icon: null },
+    { value: "all", label: "전체", icon: LayoutGrid },
     { value: "cafeteria", label: "식당", icon: Utensils },
     { value: "library", label: "도서관", icon: BookOpen },
     { value: "gym", label: "헬스장", icon: Dumbbell },
@@ -128,7 +128,7 @@ export function HomePage({ selectedDate, onNavigateToWaiting, onNavigateToDetail
                 className="text-xs py-2 px-1 flex flex-col gap-0.5 h-auto data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                 data-testid={`tab-${tab.value}`}
               >
-                {tab.icon && <tab.icon className="w-4 h-4" />}
+                <tab.icon className="w-4 h-4" />
                 <span>{tab.label}</span>
               </TabsTrigger>
             ))}
