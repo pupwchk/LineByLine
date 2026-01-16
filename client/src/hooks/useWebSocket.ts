@@ -9,12 +9,28 @@ interface WSMessage {
   };
 }
 
+function isVercelEnvironment(): boolean {
+  const hostname = window.location.hostname;
+  return hostname.includes('vercel.app') || hostname.includes('vercel.sh');
+}
+
 export function useWebSocket(onUpdate: (data: WSMessage["data"]) => void) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
+  const reconnectAttemptsRef = useRef(0);
+  const maxReconnectAttempts = 3;
 
   const connect = useCallback(() => {
+    if (isVercelEnvironment()) {
+      return;
+    }
+
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    
+    if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
+      console.log("WebSocket: max reconnect attempts reached, using polling mode");
+      return;
+    }
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}/ws`;
@@ -24,6 +40,7 @@ export function useWebSocket(onUpdate: (data: WSMessage["data"]) => void) {
 
       wsRef.current.onopen = () => {
         console.log("WebSocket connected");
+        reconnectAttemptsRef.current = 0;
       };
 
       wsRef.current.onmessage = (event) => {
@@ -38,17 +55,21 @@ export function useWebSocket(onUpdate: (data: WSMessage["data"]) => void) {
       };
 
       wsRef.current.onclose = () => {
-        console.log("WebSocket disconnected, reconnecting...");
-        reconnectTimeoutRef.current = setTimeout(connect, 5000);
+        reconnectAttemptsRef.current++;
+        if (reconnectAttemptsRef.current < maxReconnectAttempts) {
+          console.log("WebSocket disconnected, reconnecting...");
+          reconnectTimeoutRef.current = setTimeout(connect, 5000);
+        }
       };
 
-      wsRef.current.onerror = (error) => {
-        console.error("WebSocket error", error);
+      wsRef.current.onerror = () => {
         wsRef.current?.close();
       };
     } catch (error) {
-      console.error("Failed to connect WebSocket", error);
-      reconnectTimeoutRef.current = setTimeout(connect, 5000);
+      reconnectAttemptsRef.current++;
+      if (reconnectAttemptsRef.current < maxReconnectAttempts) {
+        reconnectTimeoutRef.current = setTimeout(connect, 5000);
+      }
     }
   }, [onUpdate]);
 
