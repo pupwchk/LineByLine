@@ -1,4 +1,115 @@
-import type { Facility, Waiting, InsertWaiting, HistoryItem, Corner, Order, InsertOrder } from "../shared/schema";
+export interface Corner {
+  id: string;
+  name: string;
+  type: string;
+  menu?: string;
+  price?: number;
+  congestion: number;
+  waitTime: number;
+  currentQueue: number;
+  available?: number;
+  capacity?: number;
+  operatingHours?: string;
+}
+
+export interface Facility {
+  id: string;
+  name: string;
+  type: "CAFETERIA" | "LIBRARY" | "GYM" | "CONVENIENCE";
+  location: {
+    lat: number;
+    lng: number;
+    radius: number;
+    address: string;
+    building: string;
+  };
+  capacity: number;
+  avgServiceTime: number;
+  avgCongestion: number;
+  corners: Corner[];
+}
+
+export interface Waiting {
+  id: string;
+  facilityId: string;
+  facilityName: string;
+  cornerId: string;
+  cornerName: string;
+  cornerType: string;
+  menu?: string;
+  waitingNumber: number;
+  status: "WAITING" | "CALLED" | "COMPLETED" | "CANCELLED";
+  registeredAt: string;
+  estimatedTime: number;
+  waitingAhead: number;
+  currentCalling: number;
+}
+
+export interface InsertWaiting {
+  facilityId: string;
+  facilityName: string;
+  cornerId: string;
+  cornerName: string;
+  cornerType: string;
+  menu?: string;
+}
+
+export interface HistoryItem {
+  id: string;
+  facility: string;
+  date: string;
+  status: "COMPLETED" | "CANCELLED";
+  statusText: string;
+}
+
+export interface OrderItem {
+  name: string;
+  quantity: number;
+  price: number;
+}
+
+export interface Order {
+  id: string;
+  orderId: string;
+  orderNumber: number;
+  facilityId: string;
+  facilityName: string;
+  facilityLocation: {
+    lat: number;
+    lng: number;
+  };
+  cornerId: string;
+  cornerType: string;
+  items: OrderItem[];
+  totalAmount: number;
+  paymentMethod: string;
+  status: "PENDING" | "PAID" | "QR_ACTIVE" | "QR_EXPIRED" | "COMPLETED" | "CANCELLED";
+  qrCode: string | null;
+  qrActivatedAt: string | null;
+  qrExpiresAt: string | null;
+  pickupType: string;
+  pickupTime: string;
+  createdAt: string;
+  paidAt: string | null;
+  completedAt: string | null;
+  cancelledAt: string | null;
+}
+
+export interface InsertOrder {
+  facilityId: string;
+  facilityName: string;
+  facilityLocation: {
+    lat: number;
+    lng: number;
+  };
+  cornerId: string;
+  cornerType: string;
+  items: OrderItem[];
+  totalAmount: number;
+  paymentMethod: string;
+  pickupType: string;
+  pickupTime: string;
+}
 
 const mockFacilities: Facility[] = [
   {
