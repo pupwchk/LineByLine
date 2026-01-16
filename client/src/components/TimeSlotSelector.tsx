@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
-import { Clock } from "lucide-react";
-import { format, addMinutes, setHours, setMinutes, isToday } from "date-fns";
-import { ko } from "date-fns/locale";
+import { ChevronLeft, ChevronRight, Clock } from "lucide-react";
+import { isToday } from "date-fns";
+import { useRef, useEffect, useState } from "react";
 
 interface TimeSlotSelectorProps {
   selectedDate: Date;
@@ -29,16 +29,46 @@ export function getCurrentTimeSlot(): string {
 export function TimeSlotSelector({ selectedDate, selectedTime, onTimeChange }: TimeSlotSelectorProps) {
   const isCurrentDate = isToday(selectedDate);
   const slots = generateTimeSlots();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
   
   const currentTimeSlot = getCurrentTimeSlot();
   const currentIndex = slots.indexOf(currentTimeSlot);
   
   const visibleSlots = isCurrentDate 
-    ? slots.slice(Math.max(0, currentIndex - 2), Math.min(slots.length, currentIndex + 6))
+    ? slots.slice(Math.max(0, currentIndex - 2), Math.min(slots.length, currentIndex + 10))
     : slots.filter(slot => {
         const hour = parseInt(slot.split(":")[0]);
         return hour >= 10 && hour <= 19;
       });
+
+  const updateScrollButtons = () => {
+    if (containerRef.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = containerRef.current;
+      setCanScrollLeft(scrollLeft > 5);
+      setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 5);
+    }
+  };
+
+  useEffect(() => {
+    updateScrollButtons();
+    const container = containerRef.current;
+    if (container) {
+      container.addEventListener("scroll", updateScrollButtons);
+      return () => container.removeEventListener("scroll", updateScrollButtons);
+    }
+  }, [visibleSlots]);
+
+  const scrollBy = (direction: "left" | "right") => {
+    if (containerRef.current) {
+      const scrollAmount = 180;
+      containerRef.current.scrollBy({
+        left: direction === "left" ? -scrollAmount : scrollAmount,
+        behavior: "smooth",
+      });
+    }
+  };
 
   return (
     <div className="mb-4" data-testid="time-slot-selector">
@@ -48,27 +78,55 @@ export function TimeSlotSelector({ selectedDate, selectedTime, onTimeChange }: T
           {isCurrentDate ? "시간대별 예측 조회" : "예측 시간대 선택"}
         </span>
       </div>
-      <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-hide">
-        {visibleSlots.map((slot) => {
-          const isCurrentSlot = isCurrentDate && slot === currentTimeSlot;
-          const isSelected = slot === selectedTime;
-          
-          return (
-            <Button
-              key={slot}
-              variant={isSelected ? "default" : "outline"}
-              size="sm"
-              className={`shrink-0 min-w-[60px] text-xs ${isCurrentSlot && !isSelected ? "ring-2 ring-primary ring-offset-1" : ""}`}
-              onClick={() => onTimeChange(slot)}
-              data-testid={`button-timeslot-${slot.replace(":", "")}`}
-            >
-              {slot}
-              {isCurrentSlot && (
-                <span className="ml-1 text-[10px] opacity-70">현재</span>
-              )}
-            </Button>
-          );
-        })}
+      <div className="relative flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0 h-8 w-8"
+          onClick={() => scrollBy("left")}
+          disabled={!canScrollLeft}
+          data-testid="button-timeslot-prev"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </Button>
+
+        <div 
+          ref={containerRef}
+          className="flex gap-1.5 overflow-x-auto scrollbar-none flex-1"
+          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+        >
+          {visibleSlots.map((slot) => {
+            const isCurrentSlot = isCurrentDate && slot === currentTimeSlot;
+            const isSelected = slot === selectedTime;
+            
+            return (
+              <Button
+                key={slot}
+                variant={isSelected ? "default" : "outline"}
+                size="sm"
+                className={`shrink-0 min-w-[60px] text-xs ${isCurrentSlot && !isSelected ? "ring-2 ring-primary ring-offset-1" : ""}`}
+                onClick={() => onTimeChange(slot)}
+                data-testid={`button-timeslot-${slot.replace(":", "")}`}
+              >
+                {slot}
+                {isCurrentSlot && (
+                  <span className="ml-1 text-[10px] opacity-70">현재</span>
+                )}
+              </Button>
+            );
+          })}
+        </div>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0 h-8 w-8"
+          onClick={() => scrollBy("right")}
+          disabled={!canScrollRight}
+          data-testid="button-timeslot-next"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </Button>
       </div>
     </div>
   );
