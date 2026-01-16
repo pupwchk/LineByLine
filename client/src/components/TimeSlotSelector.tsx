@@ -37,11 +37,8 @@ export function TimeSlotSelector({ selectedDate, selectedTime, onTimeChange }: T
   const currentIndex = slots.indexOf(currentTimeSlot);
   
   const visibleSlots = isCurrentDate 
-    ? slots.slice(Math.max(0, currentIndex - 2), Math.min(slots.length, currentIndex + 10))
-    : slots.filter(slot => {
-        const hour = parseInt(slot.split(":")[0]);
-        return hour >= 10 && hour <= 19;
-      });
+    ? slots.slice(Math.max(0, currentIndex - 4))
+    : slots;
 
   const updateScrollButtons = () => {
     if (containerRef.current) {
@@ -59,6 +56,17 @@ export function TimeSlotSelector({ selectedDate, selectedTime, onTimeChange }: T
       return () => container.removeEventListener("scroll", updateScrollButtons);
     }
   }, [visibleSlots]);
+
+  useEffect(() => {
+    if (containerRef.current && isCurrentDate) {
+      const selectedIndex = visibleSlots.indexOf(selectedTime);
+      if (selectedIndex > 0) {
+        const buttonWidth = 68;
+        const scrollPosition = Math.max(0, (selectedIndex - 1) * buttonWidth);
+        containerRef.current.scrollTo({ left: scrollPosition, behavior: "auto" });
+      }
+    }
+  }, [selectedDate]);
 
   const scrollBy = (direction: "left" | "right") => {
     if (containerRef.current) {
@@ -92,8 +100,12 @@ export function TimeSlotSelector({ selectedDate, selectedTime, onTimeChange }: T
 
         <div 
           ref={containerRef}
-          className="flex gap-1.5 overflow-x-auto scrollbar-none flex-1"
-          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+          className="flex gap-1.5 overflow-x-auto scrollbar-none flex-1 touch-pan-x"
+          style={{ 
+            scrollbarWidth: "none", 
+            msOverflowStyle: "none",
+            WebkitOverflowScrolling: "touch"
+          }}
         >
           {visibleSlots.map((slot) => {
             const isCurrentSlot = isCurrentDate && slot === currentTimeSlot;
