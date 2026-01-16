@@ -1,4 +1,4 @@
-import { ChevronLeft, MapPin, Clock, Utensils, BookOpen, Dumbbell, Building, Loader2 } from "lucide-react";
+import { ChevronLeft, MapPin, Clock, Utensils, BookOpen, Dumbbell, Building, Loader2, ShoppingCart } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,8 @@ import { useDocumentTitle, useMetaDescription } from "@/hooks/useDocumentTitle";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { useCart } from "@/context/CartContext";
+import type { Corner } from "@shared/schema";
 
 interface FacilityDetailPageProps {
   facilityId: string;
@@ -24,6 +26,7 @@ const facilityIcons: Record<string, typeof Utensils> = {
 
 export function FacilityDetailPage({ facilityId }: FacilityDetailPageProps) {
   const [, setLocation] = useLocation();
+  const { addItem } = useCart();
   const { data: facility, isLoading, error } = useQuery({
     queryKey: ["/api/facilities", facilityId],
     queryFn: () => fetchFacility(facilityId),
@@ -31,6 +34,28 @@ export function FacilityDetailPage({ facilityId }: FacilityDetailPageProps) {
   
   const handleBack = () => {
     setLocation("/");
+  };
+
+  const handleAddToCart = (corner: Corner) => {
+    if (!facility || !corner.menu || !corner.price) return;
+    
+    addItem(
+      {
+        menuId: `${corner.id}_${corner.menu}`,
+        menu: corner.menu,
+        price: corner.price,
+        facilityId: facility.id,
+        facilityName: facility.name,
+        cornerId: corner.id,
+        cornerType: corner.type,
+      },
+      corner,
+      {
+        id: facility.id,
+        name: facility.name,
+        location: facility.location,
+      }
+    );
   };
 
   useDocumentTitle(facility ? `${facility.name} - 줄없냥` : "시설 상세 - 줄없냥");
@@ -142,24 +167,36 @@ export function FacilityDetailPage({ facilityId }: FacilityDetailPageProps) {
               {facility.corners.map((corner) => (
                 <div
                   key={corner.id}
-                  className="flex justify-between items-center p-3 bg-muted rounded-lg"
+                  className="p-3 bg-muted rounded-lg"
                   data-testid={`menu-item-${corner.id}`}
                 >
-                  <div className="flex-1 min-w-0">
-                    <Badge variant="outline" className="mb-1 text-xs">
-                      {corner.type}
-                    </Badge>
-                    <p className="font-semibold truncate">{corner.menu}</p>
-                  </div>
-                  <div className="text-right ml-4 shrink-0">
-                    <p className="font-semibold text-primary">
-                      {corner.price?.toLocaleString()}원
-                    </p>
-                    <div className="flex items-center gap-2 mt-1 justify-end">
-                      <CongestionBar level={corner.congestion} size="small" />
-                      <span className="text-xs text-muted-foreground">{corner.waitTime}분</span>
+                  <div className="flex justify-between items-start gap-2">
+                    <div className="flex-1 min-w-0">
+                      <Badge variant="outline" className="mb-1 text-xs">
+                        {corner.type}
+                      </Badge>
+                      <p className="font-semibold truncate">{corner.menu}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="font-semibold text-primary">
+                        {corner.price?.toLocaleString()}원
+                      </p>
+                      <div className="flex items-center gap-2 mt-1 justify-end">
+                        <CongestionBar level={corner.congestion} size="small" />
+                        <span className="text-xs text-muted-foreground">{corner.waitTime}분</span>
+                      </div>
                     </div>
                   </div>
+                  <Button
+                    size="sm"
+                    className="w-full mt-3"
+                    onClick={() => handleAddToCart(corner)}
+                    disabled={!corner.menu || !corner.price}
+                    data-testid={`btn-order-${corner.id}`}
+                  >
+                    <ShoppingCart className="h-4 w-4 mr-2" />
+                    주문하기
+                  </Button>
                 </div>
               ))}
             </CardContent>

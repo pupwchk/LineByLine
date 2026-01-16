@@ -1,18 +1,20 @@
-import { Home, Clock, User } from "lucide-react";
+import { Home, Clock, User, Ticket } from "lucide-react";
 
-type NavItem = "home" | "waiting" | "mypage";
+type NavItem = "home" | "waiting" | "orders" | "mypage";
 
 interface BottomNavProps {
   active: NavItem;
   onChange: (item: NavItem) => void;
   hasActiveWaiting?: boolean;
+  hasActiveOrders?: boolean;
 }
 
-export function BottomNav({ active, onChange, hasActiveWaiting }: BottomNavProps) {
+export function BottomNav({ active, onChange, hasActiveWaiting, hasActiveOrders }: BottomNavProps) {
   const items = [
-    { id: "home" as const, icon: Home, label: "홈" },
-    { id: "waiting" as const, icon: Clock, label: "내 대기" },
-    { id: "mypage" as const, icon: User, label: "MY" },
+    { id: "home" as const, icon: Home, label: "홈", hasIndicator: false },
+    { id: "waiting" as const, icon: Clock, label: "대기", hasIndicator: hasActiveWaiting },
+    { id: "orders" as const, icon: Ticket, label: "식권", hasIndicator: hasActiveOrders },
+    { id: "mypage" as const, icon: User, label: "MY", hasIndicator: false },
   ];
 
   return (
@@ -34,7 +36,7 @@ export function BottomNav({ active, onChange, hasActiveWaiting }: BottomNavProps
           >
             <div className="relative">
               <item.icon className="w-5 h-5" />
-              {item.id === "waiting" && hasActiveWaiting && (
+              {item.hasIndicator && (
                 <span className="absolute -top-1 -right-1 w-2 h-2 bg-primary rounded-full" />
               )}
             </div>
