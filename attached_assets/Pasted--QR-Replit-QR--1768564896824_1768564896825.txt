@@ -1,0 +1,2109 @@
+🎫 식권 구매 & QR 결제 시스템 (Replit 프로토타입)
+시스템 개요
+앱을 통해 식당 메뉴를 미리 주문/결제하고, 식당 도착 시 QR 코드를 활성화하여 음식을 수령하는 시스템입니다. 기존 키오스크 대기줄을 건너뛰고 빠르게 수령할 수 있습니다.
+
+핵심 컨셉: 3단계 프로세스
+1️⃣ 미리 주문 & 결제
+   → 식권 보관함에 저장 (QR 미생성)
+
+2️⃣ 식당 도착 후 QR 활성화
+   → GPS 인증 (50m 이내)
+   → QR 생성 (3분 유효)
+
+3️⃣ QR 스캔 & 음식 수령
+   → 대기줄 건너뛰기
+
+1. 사용자 플로우
+플로우 A: 미리 주문 (추천)
+[11:50 수업 중]
+학생: 앱에서 한양플라자 메뉴 확인
+    → "치즈돈까스" 선택
+    → [주문하기] 클릭
+    
+학생: 수령 시간 선택
+    → "12:30 지정" 선택
+    
+학생: 결제 (카카오페이)
+    → ₩4,200 결제 완료
+    
+앱: ┌─────────────────────────┐
+    │ ✅ 결제 완료!           │
+    │                         │
+    │ 주문 #47                │
+    │ 치즈돈까스 ₩4,200       │
+    │                         │
+    │ 📦 식권 보관함에 저장됨 │  ← QR 없음
+    │                         │
+    │ 식당 도착 후            │
+    │ QR을 활성화해주세요     │
+    └─────────────────────────┘
+
+[12:25 수업 끝]
+학생: 식당으로 이동
+
+[12:28 식당 도착]
+학생: 앱 열기 → "주문" 탭
+    → [QR 활성화] 버튼 클릭
+    
+앱: GPS 확인 중... ✅ 시설 50m 이내
+    
+앱: ┌─────────────────────────┐
+    │ ✅ QR 활성화됨          │
+    │                         │
+    │  [  QR CODE  ]          │
+    │  ████████████████       │
+    │                         │
+    │  ⏱️ 남은 시간: 2:58    │  ← 실시간 카운트다운
+    │                         │
+    │ 12:31까지 스캔해주세요  │
+    └─────────────────────────┘
+
+학생: 식권 제출대로 이동
+    → QR 스캔
+    → 음식 수령! 🍽️
+플로우 B: 현장에서 주문
+[12:20 식당 도착]
+학생: 앱에서 메뉴 선택 → 주문
+    → 수령 시간: "지금 바로"
+    → 결제 완료
+    
+학생: [QR 활성화] 버튼 클릭 (GPS 확인)
+    → QR 생성 (3분 유효)
+    → 예상 대기: 5분
+    
+학생: 5분 후 QR 스캔 → 수령
+플로우 C: QR 만료 후 재활성화
+[12:25 QR 활성화]
+앱: ⏱️ 2:58... 2:57... 
+
+[12:28 3분 경과]
+앱: ┌─────────────────────────┐
+    │ ⏰ QR 코드 만료         │
+    │                         │
+    │  [  만료된 QR  ]        │  ← 흐리게
+    │  ░░░░░░░░░░░░           │
+    │                         │
+    │ [다시 활성화]           │  ← 재활성화 가능
+    │                         │
+    │ 식당 근처에서            │
+    │ 다시 활성화해주세요      │
+    └─────────────────────────┘
+
+학생: [다시 활성화] 클릭
+    → GPS 재확인 ✅
+    → 새 QR 생성 (다시 3분)
+    → 스캔 → 수령
+
+2. 화면 구성
+2.1 메뉴 카드 (수정: 주문 버튼 추가)
+jsx<CongestionCard corner={corner}>
+  <CardContent className="p-4">
+    {/* 기존: 코너 정보, 혼잡도 */}
+    <div className="flex justify-between items-start mb-3">
+      <div className="flex-1">
+        <Badge variant="outline">{corner.type}</Badge>
+        <h3 className="font-semibold text-lg">{corner.menu}</h3>
+        <p className="text-sm text-gray-600">₩{corner.price.toLocaleString()}</p>
+      </div>
+      <CongestionBar level={corner.congestion} />
+    </div>
+
+    {/* 신규: 액션 버튼 2개 */}
+    <div className="flex gap-2">
+      <Button 
+        variant="outline" 
+        size="sm" 
+        className="flex-1"
+        onClick={() => handleWaitingRegister(corner)}
+      >
+        <Clock className="w-4 h-4 mr-1" />
+        대기 등록
+      </Button>
+      
+      <Button 
+        size="sm" 
+        className="flex-1"
+        onClick={() => handleAddToCart(corner)}
+      >
+        <ShoppingCart className="w-4 h-4 mr-1" />
+        주문하기
+      </Button>
+    </div>
+  </CardContent>
+</CongestionCard>
+2.2 장바구니 모달 (하단 시트)
+jsx<Sheet open={showCart} onOpenChange={setShowCart}>
+  <SheetContent side="bottom" className="h-[85vh] rounded-t-2xl">
+    <SheetHeader>
+      <SheetTitle className="text-xl">장바구니</SheetTitle>
+      <SheetDescription>
+        {facility.name} · {corner.type} 코너
+      </SheetDescription>
+    </SheetHeader>
+
+    <ScrollArea className="h-[calc(100%-200px)] mt-4">
+      <div className="space-y-3">
+        {/* 주문 아이템 */}
+        {cartItems.map(item => (
+          <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            {/* 좌측: 메뉴 정보 */}
+            <div className="flex-1">
+              <p className="font-semibold">{item.menu}</p>
+              <p className="text-xs text-gray-600">
+                {item.facilityName} - {item.cornerType}
+              </p>
+            </div>
+
+            {/* 중앙: 수량 조절 */}
+            <div className="flex items-center gap-2 mx-4">
+              <Button 
+                size="icon" 
+                variant="outline" 
+                className="h-8 w-8"
+                onClick={() => decreaseQuantity(item.id)}
+                disabled={item.quantity <= 1}
+              >
+                <Minus className="w-3 h-3" />
+              </Button>
+              
+              <span className="font-semibold w-8 text-center">
+                {item.quantity}
+              </span>
+              
+              <Button 
+                size="icon" 
+                variant="outline" 
+                className="h-8 w-8"
+                onClick={() => increaseQuantity(item.id)}
+                disabled={item.quantity >= 5}
+              >
+                <Plus className="w-3 h-3" />
+              </Button>
+            </div>
+
+            {/* 우측: 가격 */}
+            <div className="text-right w-20">
+              <p className="font-semibold">
+                ₩{(item.price * item.quantity).toLocaleString()}
+              </p>
+              <Button 
+                size="sm" 
+                variant="ghost" 
+                className="h-6 p-0"
+                onClick={() => removeItem(item.id)}
+              >
+                <X className="w-4 h-4 text-gray-400" />
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <Separator className="my-4" />
+
+      {/* 수령 시간 선택 */}
+      <Card className="border-2">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Clock className="w-5 h-5" />
+            수령 시간
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <RadioGroup value={pickupType} onValueChange={setPickupType}>
+            {/* 지금 바로 */}
+            <div className="flex items-center space-x-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+              <RadioGroupItem value="now" id="now" />
+              <Label htmlFor="now" className="flex-1 cursor-pointer">
+                <p className="font-semibold">지금 바로</p>
+                <p className="text-xs text-gray-600">
+                  예상 대기: {estimatedWaitTime}분
+                </p>
+              </Label>
+            </div>
+
+            {/* 시간 지정 */}
+            <div className="flex items-center space-x-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+              <RadioGroupItem value="scheduled" id="scheduled" />
+              <Label htmlFor="scheduled" className="flex-1 cursor-pointer">
+                <p className="font-semibold">시간 지정</p>
+                <p className="text-xs text-gray-600">
+                  원하는 시간에 수령
+                </p>
+              </Label>
+            </div>
+          </RadioGroup>
+
+          {/* 시간 지정 시 시간 선택 */}
+          {pickupType === 'scheduled' && (
+            <div className="pt-2 space-y-2">
+              <Label className="text-sm text-gray-600">수령 시간 선택</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <Select value={scheduledHour} onValueChange={setScheduledHour}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="시" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {generateAvailableHours().map(h => (
+                      <SelectItem key={h} value={h}>
+                        {h}시
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={scheduledMinute} onValueChange={setScheduledMinute}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="분" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {['00', '15', '30', '45'].map(m => (
+                      <SelectItem key={m} value={m}>
+                        {m}분
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {scheduledHour && scheduledMinute && (
+                <Alert>
+                  <AlertDescription className="text-sm">
+                    {scheduledHour}:{scheduledMinute}에 수령 가능하도록 준비됩니다
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </ScrollArea>
+
+    {/* 하단 고정: 총 금액 & 결제 버튼 */}
+    <div className="absolute bottom-0 left-0 right-0 bg-white border-t p-4">
+      <div className="space-y-2 mb-3">
+        <div className="flex justify-between text-sm">
+          <span className="text-gray-600">메뉴 금액</span>
+          <span className="font-semibold">₩{totalAmount.toLocaleString()}</span>
+        </div>
+        <div className="flex justify-between text-lg font-bold">
+          <span>총 결제금액</span>
+          <span className="text-blue-600">₩{totalAmount.toLocaleString()}</span>
+        </div>
+      </div>
+
+      <Button 
+        className="w-full h-14 text-lg"
+        onClick={handleProceedToPayment}
+        disabled={cartItems.length === 0}
+      >
+        ₩{totalAmount.toLocaleString()} 결제하기
+      </Button>
+    </div>
+  </SheetContent>
+</Sheet>
+2.3 결제 수단 선택 모달
+jsx<Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
+  <DialogContent className="max-w-md">
+    <DialogHeader>
+      <DialogTitle className="text-xl">결제 수단 선택</DialogTitle>
+      <DialogDescription>
+        총 ₩{totalAmount.toLocaleString()}
+      </DialogDescription>
+    </DialogHeader>
+
+    <div className="space-y-2 my-4">
+      {/* 카카오페이 */}
+      <Button
+        variant="outline"
+        className="w-full h-16 justify-start text-left"
+        onClick={() => processPayment('kakao')}
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-yellow-400 rounded-lg flex items-center justify-center">
+            <span className="font-bold text-sm">KAKAO</span>
+          </div>
+          <div>
+            <p className="font-semibold">카카오페이</p>
+            <p className="text-xs text-gray-500">간편결제</p>
+          </div>
+        </div>
+        <ChevronRight className="ml-auto w-5 h-5 text-gray-400" />
+      </Button>
+
+      {/* 토스페이 */}
+      <Button
+        variant="outline"
+        className="w-full h-16 justify-start text-left"
+        onClick={() => processPayment('toss')}
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
+            <span className="font-bold text-white text-sm">toss</span>
+          </div>
+          <div>
+            <p className="font-semibold">토스페이</p>
+            <p className="text-xs text-gray-500">간편결제</p>
+          </div>
+        </div>
+        <ChevronRight className="ml-auto w-5 h-5 text-gray-400" />
+      </Button>
+
+      {/* 카드 결제 */}
+      <Button
+        variant="outline"
+        className="w-full h-16 justify-start text-left"
+        onClick={() => processPayment('card')}
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+            <CreditCard className="w-6 h-6 text-gray-600" />
+          </div>
+          <div>
+            <p className="font-semibold">신용/체크카드</p>
+            <p className="text-xs text-gray-500">일반결제</p>
+          </div>
+        </div>
+        <ChevronRight className="ml-auto w-5 h-5 text-gray-400" />
+      </Button>
+
+      {/* 학생 식권 (충전식) - Optional */}
+      <Button
+        variant="outline"
+        className="w-full h-16 justify-start text-left"
+        onClick={() => processPayment('meal_card')}
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+            <Ticket className="w-6 h-6 text-purple-600" />
+          </div>
+          <div className="flex-1">
+            <p className="font-semibold">학생 식권</p>
+            <p className="text-xs text-gray-500">잔액: ₩15,000</p>
+          </div>
+        </div>
+        <ChevronRight className="ml-auto w-5 h-5 text-gray-400" />
+      </Button>
+    </div>
+
+    <DialogFooter>
+      <Button 
+        variant="ghost" 
+        className="w-full"
+        onClick={() => setShowPaymentDialog(false)}
+      >
+        취소
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+2.4 결제 완료 화면 (식권 보관함 저장)
+jsx<div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 flex items-center justify-center p-4">
+  <Card className="w-full max-w-md">
+    {/* 성공 아이콘 */}
+    <CardHeader className="text-center pb-3">
+      <div className="mx-auto mb-4 h-20 w-20 rounded-full bg-green-100 flex items-center justify-center animate-bounce-once">
+        <CheckCircle className="h-12 w-12 text-green-600" />
+      </div>
+      <CardTitle className="text-2xl font-bold">결제 완료!</CardTitle>
+      <CardDescription className="text-base">
+        식권이 보관함에 저장되었습니다
+      </CardDescription>
+    </CardHeader>
+
+    <CardContent className="space-y-4">
+      {/* 주문 정보 */}
+      <div className="bg-white rounded-lg p-4 border-2 border-gray-200">
+        <div className="flex items-start justify-between mb-3">
+          <div>
+            <p className="text-sm text-gray-600">주문번호</p>
+            <p className="text-2xl font-bold text-blue-600">#{orderNumber}</p>
+          </div>
+          <Badge variant="secondary" className="text-sm">
+            결제 완료
+          </Badge>
+        </div>
+
+        <Separator className="my-3" />
+
+        <div className="space-y-2">
+          <div>
+            <p className="font-semibold text-lg">{facility.name}</p>
+            <p className="text-sm text-gray-600">{corner.type} 코너</p>
+          </div>
+
+          {items.map(item => (
+            <div key={item.id} className="flex justify-between text-sm py-1">
+              <span className="text-gray-600">
+                {item.menu} x{item.quantity}
+              </span>
+              <span className="font-semibold">
+                ₩{(item.price * item.quantity).toLocaleString()}
+              </span>
+            </div>
+          ))}
+
+          <Separator className="my-2" />
+
+          <div className="flex justify-between font-bold text-lg">
+            <span>결제금액</span>
+            <span className="text-blue-600">
+              ₩{totalAmount.toLocaleString()}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* 수령 시간 */}
+      <Alert className="border-2 border-blue-200 bg-blue-50">
+        <Clock className="h-5 w-5 text-blue-600" />
+        <AlertTitle className="text-blue-900 font-semibold">
+          수령 예정 시간
+        </AlertTitle>
+        <AlertDescription className="text-blue-800">
+          {pickupType === 'now' 
+            ? `지금부터 ~ ${formatTime(expiryTime)} (약 ${estimatedWaitTime}분)`
+            : `${scheduledTime} ~ ${formatTime(expiryTime)}`
+          }
+        </AlertDescription>
+      </Alert>
+
+      {/* 중요: QR 활성화 안내 */}
+      <Card className="border-2 border-orange-200 bg-orange-50">
+        <CardContent className="p-4">
+          <div className="flex gap-3">
+            <div className="flex-shrink-0">
+              <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center">
+                <QrCode className="w-7 h-7 text-orange-600" />
+              </div>
+            </div>
+            <div className="flex-1">
+              <p className="font-semibold text-orange-900 mb-1">
+                📦 식권 보관함에 저장됨
+              </p>
+              <p className="text-sm text-orange-800 leading-relaxed">
+                식당 도착 후 "주문" 탭에서 <span className="font-semibold">QR을 활성화</span>하여 사용하세요
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 안내사항 */}
+      <div className="text-xs text-gray-500 space-y-1 bg-gray-50 rounded-lg p-3">
+        <p className="font-semibold text-gray-700 mb-2">📌 안내사항</p>
+        <p>• QR은 식당 근처(50m 이내)에서만 활성화됩니다</p>
+        <p>• 활성화된 QR은 3분간 유효합니다</p>
+        <p>• 만료 시 재활성화 가능합니다</p>
+        <p>• 취소/환불은 수령 전까지만 가능합니다</p>
+      </div>
+    </CardContent>
+
+    <CardFooter className="flex flex-col gap-2">
+      <Button 
+        className="w-full h-12"
+        onClick={() => navigate('/orders')}
+      >
+        <ShoppingBag className="w-5 h-5 mr-2" />
+        내 주문 보기
+      </Button>
+      <Button 
+        variant="outline" 
+        className="w-full"
+        onClick={() => navigate('/')}
+      >
+        홈으로 돌아가기
+      </Button>
+    </CardFooter>
+  </Card>
+</div>
+2.5 주문 목록 화면 (새 탭 추가)
+jsxconst OrdersPage = () => {
+  const { orders } = useOrders();
+  const activeOrders = orders.filter(o => ['PAID', 'QR_ACTIVE'].includes(o.status));
+  const completedOrders = orders.filter(o => o.status === 'COMPLETED');
+
+  return (
+    <div className="min-h-screen bg-gray-50 pb-20">
+      {/* 헤더 */}
+      <header className="sticky top-0 bg-white border-b z-10 px-4 py-4">
+        <h1 className="text-2xl font-bold">내 주문</h1>
+      </header>
+
+      <div className="p-4 space-y-6">
+        {/* 활성 주문 (식권 보관함) */}
+        {activeOrders.length > 0 && (
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <Ticket className="w-5 h-5 text-blue-600" />
+              <h2 className="font-bold text-lg">식권 보관함</h2>
+              <Badge variant="secondary">{activeOrders.length}</Badge>
+            </div>
+
+            <div className="space-y-3">
+              {activeOrders.map(order => (
+                <OrderCard key={order.id} order={order} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* 빈 상태 */}
+        {activeOrders.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16">
+            <ShoppingBag className="w-16 h-16 text-gray-300 mb-4" />
+            <p className="text-gray-500 mb-1">주문 내역이 없습니다</p>
+            <p className="text-sm text-gray-400">메뉴를 주문해보세요!</p>
+          </div>
+        )}
+
+        {/* 완료된 주문 */}
+        {completedOrders.length > 0 && (
+          <section>
+            <h2 className="font-bold text-lg mb-3">이용 내역</h2>
+            <div className="space-y-2">
+              {completedOrders.map(order => (
+                <CompletedOrderCard key={order.id} order={order} />
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// 활성 주문 카드
+const OrderCard = ({ order }) => {
+  const [showQR, setShowQR] = useState(false);
+  
+  return (
+    <Card className="border-2 hover:shadow-lg transition-shadow">
+      <CardContent className="p-4">
+        {/* 주문 헤더 */}
+        <div className="flex justify-between items-start mb-3">
+          <div className="flex-1">
+            <p className="font-bold text-lg">{order.facility.name}</p>
+            <p className="text-sm text-gray-600">{order.corner.type} 코너</p>
+            <p className="text-xs text-gray-500 mt-1">
+              주문번호 #{order.orderNumber}
+            </p>
+          </div>
+          
+          <Badge 
+            variant={order.status === 'QR_ACTIVE' ? 'default' : 'secondary'}
+            className="text-sm"
+          >
+            {order.status === 'PAID' ? '💳 결제완료' : '✅ QR활성화'}
+          </Badge>
+        </div>
+
+        {/* 주문 항목 */}
+        <div className="bg-gray-50 rounded-lg p-3 mb-3">
+          {order.items.map(item => (
+            <div key={item.id} className="flex justify-between text-sm py-1">
+              <span>{item.menu} x{item.quantity}</span>
+              <span className="font-semibold">
+                ₩{(item.price * item.quantity).toLocaleString()}
+              </span>
+            </div>
+          ))}
+          <Separator className="my-2" />
+          <div className="flex justify-between font-bold">
+            <span>총 금액</span>
+            <span className="text-blue-600">
+              ₩{order.totalAmount.toLocaleString()}
+            </span>
+          </div>
+        </div>
+
+        {/* 수령 시간 */}
+        <div className="flex items-center gap-2 text-sm text-gray-600 mb-3">
+          <Clock className="w-4 h-4" />
+          <span>수령: {formatPickupTime(order.pickupTime)}</span>
+        </div>
+
+        {/* QR 상태별 액션 버튼 */}
+        {order.status === 'PAID' && (
+          <Button
+            className="w-full h-12"
+            onClick={() => handleActivateQR(order)}
+          >
+            <QrCode className="w-5 h-5 mr-2" />
+            QR 활성화
+          </Button>
+        )}
+
+        {order.status === 'QR_ACTIVE' && (
+          <Button
+            className="w-full h-12"
+            onClick={() => setShowQR(true)}
+          >
+            <Eye className="w-5 h-5 mr-2" />
+            QR 보기
+          </Button>
+        )}
+
+        {/* 하단 링크 */}
+        <div className="flex gap-2 mt-2">
+          {order.status === 'PAID' && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="flex-1 text-red-600"
+              onClick={() => handleCancelOrder(order.id)}
+            >
+              주문 취소
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="flex-1"
+            onClick={() => navigate(`/orders/${order.id}`)}
+          >
+            상세보기
+          </Button>
+        </div>
+      </CardContent>
+
+      {/* QR 모달 */}
+      {showQR && (
+        <QRModal order={order} onClose={() => setShowQR(false)} />
+      )}
+    </Card>
+  );
+};
+2.6 QR 활성화 프로세스
+jsxconst QRActivationFlow = ({ order, onSuccess, onError }) => {
+  const [step, setStep] = useState('idle'); // idle, checking, success, error
+  const [distance, setDistance] = useState(null);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  const handleActivate = async () => {
+    setStep('checking');
+
+    try {
+      // 1. GPS 위치 가져오기
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 5000,
+          maximumAge: 0
+        });
+      });
+
+      const userLocation = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude
+      };
+
+      // 2. 거리 계산
+      const dist = calculateDistance(
+        userLocation.lat,
+        userLocation.lng,
+        order.facility.location.lat,
+        order.facility.location.lng
+      );
+      setDistance(Math.round(dist));
+
+      // 3. 50m 이내 확인
+      if (dist > 50) {
+        setStep('error');
+        setErrorMessage(`식당에서 ${Math.round(dist)}m 떨어져 있습니다`);
+        return;
+      }
+
+      // 4. 서버에 QR 활성화 요청
+      const response = await fetch(`/api/orders/${order.id}/activate-qr`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userLocation })
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        setStep('error');
+        setErrorMessage(result.message || '활성화 실패');
+        onError?.(result);
+        return;
+      }
+
+      // 5. 성공
+      setStep('success');
+      onSuccess?.(result);
+
+    } catch (error) {
+      setStep('error');
+      setErrorMessage(error.message || '위치 확인 실패');
+      onError?.(error);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Idle: 활성화 대기 */}
+      {step === 'idle' && (
+        <div className="text-center py-8">
+          <div className="mx-auto mb-4 h-20 w-20 rounded-full bg-blue-100 flex items-center justify-center">
+            <QrCode className="h-10 w-10 text-blue-600" />
+          </div>
+          <p className="font-semibold text-lg mb-2">식당 근처에서 QR을 활성화하세요</p>
+          <p className="text-sm text-gray-600 mb-4">
+            {order.facility.name} 50m 이내에서만 활성화됩니다
+          </p>
+          <Button 
+            className="w-full h-12"
+            onClick={handleActivate}
+          >
+            <MapPin className="w-5 h-5 mr-2" />
+            QR 활성화
+          </Button>
+        </div>
+      )}
+
+      {/* Checking: 위치 확인 중 */}
+      {step === 'checking' && (
+        <div className="text-center py-8">
+          <div className="mx-auto mb-4 h-20 w-20 rounded-full bg-blue-100 flex items-center justify-center animate-pulse">
+            <MapPin className="h-10 w-10 text-blue-600 animate-bounce" />
+          </div>
+          <p className="font-semibold text-lg mb-2">위치 확인 중...</p>
+          <p className="text-sm text-gray-600">
+            GPS로 현재 위치를 확인하고 있습니다
+          </p>
+        </div>
+      )}
+
+      {/* Error: 활성화 실패 */}
+      {step === 'error' && (
+        <div className="text-center py-8">
+          <div className="mx-auto mb-4 h-20 w-20 rounded-full bg-red-100 flex items-center justify-center">
+            <AlertCircle className="h-10 w-10 text-red-600" />
+          </div>
+          <p className="font-semibold text-lg text-red-900 mb-2">
+            활성화 실패
+          </p>
+          <p className="text-sm text-red-700 mb-4">
+            {errorMessage}
+          </p>
+          {distance && distance > 50 && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertDescription>
+                식당에서 <span className="font-bold">{distance}m</span> 떨어져 있습니다
+                <br />
+                <span className="font-bold">50m 이내</span>로 이동해주세요
+              </AlertDescription>
+            </Alert>
+          )}
+          <Button 
+            variant="outline"
+            className="w-full"
+            onClick={handleActivate}
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            다시 시도
+          </Button>
+        </div>
+      )}
+
+      {/* Success: 활성화 성공 - QR 표시로 자동 전환 */}
+    </div>
+  );
+};
+2.7 QR 코드 표시 모달 (활성화 후)
+jsxconst QRModal = ({ order, onClose }) => {
+  const [remainingTime, setRemainingTime] = useState(180); // 3분 = 180초
+  const [isExpired, setIsExpired] = useState(false);
+
+  // 타이머 (1초마다 업데이트)
+  useEffect(() => {
+    if (order.status !== 'QR_ACTIVE') return;
+
+    const timer = setInterval(() => {
+      const now = new Date();
+      const expiresAt = new Date(order.qrExpiresAt);
+      const remaining = Math.max(0, Math.floor((expiresAt - now) / 1000));
+
+      setRemainingTime(remaining);
+
+      if (remaining === 0) {
+        setIsExpired(true);
+        clearInterval(timer);
+      }
+
+      // 30초 남았을 때 진동 알림
+      if (remaining === 30) {
+        navigator.vibrate?.([200, 100, 200]);
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [order]);
+
+  const minutes = Math.floor(remainingTime / 60);
+  const seconds = remainingTime % 60;
+  const progressPercent = (remainingTime / 180) * 100;
+  const isWarning = remainingTime <= 30;
+
+  return (
+    <Dialog open={true} onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-center text-xl">
+            {isExpired ? '⏰ QR 코드 만료' : '✅ QR 코드 활성화됨'}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {!isExpired ? (
+            <>
+              {/* QR 코드 */}
+              <div className="bg-white p-6 rounded-lg border-4 border-dashed border-gray-300">
+                <QRCodeSVG
+                  value={order.qrCode}
+                  size={220}
+                  level="H"
+                  includeMargin={true}
+                  className="mx-auto"
+                />
+              </div>
+
+              {/* 타이머 */}
+              <div className="text-center">
+                <p className="text-sm text-gray-600 mb-2">남은 시간</p>
+                <div className={`text-5xl font-bold mb-2 ${isWarning ? 'text-red-600 animate-pulse' : 'text-blue-600'}`}>
+                  {minutes}:{seconds.toString().padStart(2, '0')}
+                </div>
+                
+                {/* 프로그레스 바 */}
+                <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-1000 ${
+                      isWarning ? 'bg-red-500' : 'bg-blue-500'
+                    }`}
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+
+                <p className="text-sm text-gray-600 mt-2">
+                  {formatTime(order.qrExpiresAt)}까지 스캔해주세요
+                </p>
+
+                {isWarning && (
+                  <Alert variant="destructive" className="mt-3">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      곧 만료됩니다! 서둘러 스캔해주세요
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
+
+              {/* 주문 정보 */}
+              <div className="bg-gray-50 rounded-lg p-3 text-sm">
+                <div className="flex justify-between mb-1">
+                  <span className="text-gray-600">주문번호</span>
+                  <span className="font-semibold">#{order.orderNumber}</span>
+                </div>
+                <div className="flex justify-between mb-1">
+                  <span className="text-gray-600">식당</span>
+                  <span className="font-semibold">{order.facility.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">메뉴</span>
+                  <span className="font-semibold">
+                    {order.items.map(i => i.menu).join(', ')}
+                  </span>
+                </div>
+              </div>
+
+              {/* 안내 */}
+              <div className="text-xs text-gray-500 space-y-1">
+                <p>• QR 코드를 식권 제출대에서 스캔하세요</p>
+                <p>• 1회만 사용 가능합니다</p>
+                <p>• 만료 시 재활성화 가능합니다</p>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* 만료된 QR */}
+              <div className="text-center py-8">
+                <div className="mx-auto mb-4 h-20 w-20 rounded-full bg-orange-100 flex items-center justify-center">
+                  <Clock className="h-10 w-10 text-orange-600" />
+                </div>
+                <p className="font-semibold text-lg text-orange-900 mb-2">
+                  QR 코드가 만료되었습니다
+                </p>
+                <p className="text-sm text-gray-600 mb-4">
+                  식당 근처에서 다시 활성화해주세요
+                </p>
+
+                <Button
+                  className="w-full h-12"
+                  onClick={() => {
+                    onClose();
+                    // 재활성화 플로우로 이동
+                  }}
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  다시 활성화
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" className="w-full" onClick={onClose}>
+            닫기
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+2.8 하단 네비게이션 (주문 탭 추가)
+jsx<nav className="fixed bottom-0 left-0 right-0 bg-white border-t z-50 safe-area-bottom">
+  <div className="max-w-2xl mx-auto grid grid-cols-4">
+    {/* 홈 */}
+    <Link
+      to="/"
+      className={`flex flex-col items-center py-3 ${
+        pathname === '/' ? 'text-blue-600' : 'text-gray-600'
+      }`}
+    >
+      <Home className={`w-6 h-6 ${pathname === '/' ? 'fill-current' : ''}`} />
+      <span className="text-xs mt-1">홈</span>
+    </Link>
+
+    {/* 주문 (신규) */}
+    <Link
+      to="/orders"
+      className={`flex flex-col items-center py-3 relative ${
+        pathname === '/orders' ? 'text-blue-600' : 'text-gray-600'
+      }`}
+    >
+      <div className="relative">
+        <ShoppingBag className={`w-6 h-6 ${pathname === '/orders' ? 'fill-current' : ''}`} />
+        {activeOrdersCount > 0 && (
+          <Badge
+            variant="destructive"
+            className="absolute -top-2 -right-2 h-5 w-5 p-0 flex items-center justify-center text-xs"
+          >
+            {activeOrdersCount}
+          </Badge>
+        )}
+      </div>
+      <span className="text-xs mt-1">주문</span>
+    </Link>
+
+    {/* 내 대기 */}
+    <Link
+      to="/waiting"
+      className={`flex flex-col items-center py-3 relative ${
+        pathname === '/waiting' ? 'text-blue-600' : 'text-gray-600'
+      }`}
+    >
+      <div className="relative">
+        <Clock className={`w-6 h-6 ${pathname === '/waiting' ? 'fill-current' : ''}`} />
+        {activeWaitingCount > 0 && (
+          <Badge
+            variant="destructive"
+            className="absolute -top-2 -right-2 h-5 w-5 p-0 flex items-center justify-center text-xs"
+          >
+            {activeWaitingCount}
+          </Badge>
+        )}
+      </div>
+      <span className="text-xs mt-1">내 대기</span>
+    </Link>
+
+    {/* MY */}
+    <Link
+      to="/my"
+      className={`flex flex-col items-center py-3 ${
+        pathname === '/my' ? 'text-blue-600' : 'text-gray-600'
+      }`}
+    >
+      <User className={`w-6 h-6 ${pathname === '/my' ? 'fill-current' : ''}`} />
+      <span className="text-xs mt-1">MY</span>
+    </Link>
+  </div>
+</nav>
+
+3. 데이터 구조
+3.1 주문 데이터
+javascript// 주문 생성 시 (결제 완료)
+{
+  id: "uuid-v4",
+  orderId: "ORD_20260116_001234",
+  orderNumber: 47,
+  userId: "user_123",
+  
+  // 시설 정보
+  facilityId: "hanyang_plaza",
+  facilityName: "학생복지관 (한양플라자)",
+  cornerId: "hanyang_plaza_yangshik",
+  cornerType: "양식",
+  
+  // 주문 항목
+  items: [
+    {
+      id: "item_1",
+      menuId: "menu_001",
+      menu: "치즈돈까스",
+      quantity: 1,
+      price: 4200
+    }
+  ],
+  totalAmount: 4200,
+  
+  // 결제 정보
+  paymentMethod: "kakao",
+  paymentId: "PAY_xyz",
+  
+  // 상태 (핵심)
+  status: "PAID",  // PENDING, PAID, QR_ACTIVE, COMPLETED, CANCELLED, EXPIRED
+  
+  // QR 관련
+  activationToken: "ACT_abc123",  // 발급 권한
+  qrCode: null,                   // QR 미생성 상태
+  qrActivatedAt: null,
+  qrExpiresAt: null,
+  
+  // 수령 시간
+  pickupType: "scheduled",  // "now" or "scheduled"
+  pickupTime: "2026-01-16T12:30:00",
+  
+  // 타임스탬프
+  createdAt: "2026-01-16T11:50:00",
+  paidAt: "2026-01-16T11:52:00",
+  completedAt: null,
+  cancelledAt: null
+}
+
+// QR 활성화 후
+{
+  ...
+  status: "QR_ACTIVE",
+  qrCode: "QR_def456",  // 새로 생성됨
+  qrActivatedAt: "2026-01-16T12:28:00",
+  qrExpiresAt: "2026-01-16T12:31:00"  // 3분 후
+}
+
+// 만료 후
+{
+  ...
+  status: "QR_EXPIRED",
+  qrCode: null,  // 무효화
+  qrActivatedAt: null,
+  qrExpiresAt: null
+  // activationToken은 유지 (재활성화 가능)
+}
+
+// 스캔 완료 후
+{
+  ...
+  status: "COMPLETED",
+  completedAt: "2026-01-16T12:29:00"
+}
+3.2 QR 코드 데이터 (암호화)
+javascript// QR 코드에 담을 데이터
+const qrPayload = {
+  orderId: "ORD_20260116_001234",
+  orderNumber: 47,
+  facilityId: "hanyang_plaza",
+  cornerId: "hanyang_plaza_yangshik",
+  activatedAt: "2026-01-16T12:28:00",
+  expiresAt: "2026-01-16T12:31:00",
+  items: [
+    { menuId: "menu_001", quantity: 1 }
+  ],
+  totalAmount: 4200,
+  // HMAC-SHA256 서명 (위변조 방지)
+  signature: "a3f8d9e2b1c..."
+};
+
+// Base64 인코딩
+const qrString = btoa(JSON.stringify(qrPayload));
+
+// QR 생성
+<QRCodeSVG value={qrString} size={220} level="H" />
+
+4. API 엔드포인트
+4.1 주문 생성
+javascriptPOST /api/orders
+{
+  "facilityId": "hanyang_plaza",
+  "cornerId": "hanyang_plaza_yangshik",
+  "items": [
+    {
+      "menuId": "menu_001",
+      "menu": "치즈돈까스",
+      "quantity": 1,
+      "price": 4200
+    }
+  ],
+  "pickupType": "scheduled",
+  "pickupTime": "2026-01-16T12:30:00",
+  "paymentMethod": "kakao"
+}
+
+// 응답
+{
+  "success": true,
+  "order": {
+    "orderId": "ORD_20260116_001234",
+    "orderNumber": 47,
+    "status": "PENDING",
+    "activationToken": "ACT_abc123",
+    "totalAmount": 4200,
+    "paymentUrl": "https://payment-gateway.com/pay/xxx"
+  }
+}
+4.2 결제 완료 웹훅 (PG사 → 서버)
+javascriptPOST /api/payments/webhook
+{
+  "orderId": "ORD_20260116_001234",
+  "paymentId": "PAY_xyz",
+  "status": "SUCCESS",
+  "amount": 4200
+}
+
+// 서버 처리:
+// 1. 주문 상태: PENDING → PAID
+// 2. 식권 보관함에 저장
+// 3. 사용자에게 알림
+4.3 QR 활성화
+javascriptPOST /api/orders/:orderId/activate-qr
+{
+  "userLocation": {
+    "lat": 37.5575,
+    "lng": 127.0469
+  }
+}
+
+// 응답 (성공)
+{
+  "success": true,
+  "qrCode": "QR_def456",
+  "activatedAt": "2026-01-16T12:28:00",
+  "expiresAt": "2026-01-16T12:31:00",
+  "expiresIn": 180
+}
+
+// 응답 (거리 초과)
+{
+  "success": false,
+  "reason": "TOO_FAR",
+  "distance": 350,
+  "required": 50,
+  "message": "식당에서 350m 떨어져 있습니다"
+}
+
+// 응답 (이미 완료됨)
+{
+  "success": false,
+  "reason": "ALREADY_COMPLETED",
+  "message": "이미 사용된 주문입니다"
+}
+4.4 QR 검증 (식당 스캐너)
+javascriptPOST /api/orders/verify
+{
+  "qrCode": "QR_def456",
+  "facilityId": "hanyang_plaza"
+}
+
+// 응답 (성공)
+{
+  "valid": true,
+  "order": {
+    "orderNumber": 47,
+    "items": [
+      { "menu": "치즈돈까스", "quantity": 1 }
+    ],
+    "totalAmount": 4200,
+    "customerName": "홍길동"
+  }
+}
+
+// 응답 (만료됨)
+{
+  "valid": false,
+  "reason": "EXPIRED",
+  "message": "QR 코드가 만료되었습니다"
+}
+
+// 응답 (이미 사용됨)
+{
+  "valid": false,
+  "reason": "ALREADY_USED",
+  "message": "이미 사용된 주문입니다"
+}
+4.5 내 주문 조회
+javascriptGET /api/orders/my?status=active
+
+// 응답
+{
+  "orders": [
+    {
+      "orderId": "ORD_20260116_001234",
+      "orderNumber": 47,
+      "status": "PAID",
+      "facility": { ... },
+      "items": [ ... ],
+      "totalAmount": 4200,
+      "pickupTime": "2026-01-16T12:30:00",
+      "createdAt": "2026-01-16T11:50:00"
+    }
+  ]
+}
+4.6 주문 취소
+javascriptPOST /api/orders/:orderId/cancel
+
+// 응답
+{
+  "success": true,
+  "refundAmount": 4200,
+  "message": "주문이 취소되었습니다"
+}
+
+5. 백엔드 로직
+5.1 QR 활성화 처리
+javascript// server/routes/orders.js
+
+app.post('/api/orders/:orderId/activate-qr', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { userLocation } = req.body;
+
+    // 1. 주문 조회
+    const order = await db.orders.findOne({
+      where: { orderId }
+    });
+
+    if (!order) {
+      return res.json({
+        success: false,
+        reason: 'NOT_FOUND',
+        message: '주문을 찾을 수 없습니다'
+      });
+    }
+
+    // 2. 상태 확인
+    if (order.status === 'COMPLETED') {
+      return res.json({
+        success: false,
+        reason: 'ALREADY_COMPLETED',
+        message: '이미 사용된 주문입니다'
+      });
+    }
+
+    if (order.status === 'CANCELLED') {
+      return res.json({
+        success: false,
+        reason: 'CANCELLED',
+        message: '취소된 주문입니다'
+      });
+    }
+
+    if (order.status !== 'PAID' && order.status !== 'QR_EXPIRED') {
+      return res.json({
+        success: false,
+        reason: 'INVALID_STATUS',
+        message: '활성화할 수 없는 상태입니다'
+      });
+    }
+
+    // 3. GPS 거리 확인
+    const facility = await db.facilities.findOne({
+      where: { id: order.facilityId }
+    });
+
+    const distance = calculateDistance(
+      userLocation.lat,
+      userLocation.lng,
+      facility.location.lat,
+      facility.location.lng
+    );
+
+    if (distance > 50) {
+      return res.json({
+        success: false,
+        reason: 'TOO_FAR',
+        distance: Math.round(distance),
+        required: 50,
+        message: `식당에서 ${Math.round(distance)}m 떨어져 있습니다`
+      });
+    }
+
+    // 4. QR 코드 생성
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 3 * 60 * 1000); // 3분 후
+
+    const qrPayload = {
+      orderId: order.orderId,
+      orderNumber: order.orderNumber,
+      facilityId: order.facilityId,
+      cornerId: order.cornerId,
+      activatedAt: now.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+      items: order.items,
+      totalAmount: order.totalAmount,
+      signature: generateSignature({
+        orderId: order.orderId,
+        activatedAt: now.toISOString()
+      })
+    };
+
+    const qrCode = btoa(JSON.stringify(qrPayload));
+
+    // 5. DB 업데이트
+    await db.orders.update({
+      where: { orderId },
+      data: {
+        status: 'QR_ACTIVE',
+        qrCode,
+        qrActivatedAt: now,
+        qrExpiresAt: expiresAt
+      }
+    });
+
+    // 6. 성공 응답
+    res.json({
+      success: true,
+      qrCode,
+      activatedAt: now.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+      expiresIn: 180
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      reason: 'SERVER_ERROR',
+      message: '서버 오류가 발생했습니다'
+    });
+  }
+});
+5.2 QR 만료 처리 (크론잡)
+javascript// server/jobs/expireQR.js
+
+const cron = require('node-cron');
+
+// 매 1분마다 실행
+cron.schedule('* * * * *', async () => {
+  const now = new Date();
+
+  // 만료된 QR 찾기
+  const expiredOrders = await db.orders.findMany({
+    where: {
+      status: 'QR_ACTIVE',
+      qrExpiresAt: {
+        lte: now
+      }
+    }
+  });
+
+  // 상태 업데이트
+  for (const order of expiredOrders) {
+    await db.orders.update({
+      where: { orderId: order.orderId },
+      data: {
+        status: 'QR_EXPIRED',
+        qrCode: null,
+        qrActivatedAt: null,
+        qrExpiresAt: null
+      }
+    });
+
+    // 사용자에게 알림 (선택)
+    await sendNotification(order.userId, {
+      title: 'QR 코드 만료',
+      body: `주문 #${order.orderNumber}의 QR이 만료되었습니다. 재활성화하세요.`
+    });
+  }
+});
+5.3 QR 검증 로직
+javascript// server/routes/orders.js
+
+app.post('/api/orders/verify', async (req, res) => {
+  try {
+    const { qrCode, facilityId } = req.body;
+
+    // 1. QR 디코딩
+    let payload;
+    try {
+      payload = JSON.parse(atob(qrCode));
+    } catch (e) {
+      return res.json({
+        valid: false,
+        reason: 'INVALID_QR',
+        message: '유효하지 않은 QR 코드입니다'
+      });
+    }
+
+    // 2. 서명 검증
+    const expectedSignature = generateSignature({
+      orderId: payload.orderId,
+      activatedAt: payload.activatedAt
+    });
+
+    if (payload.signature !== expectedSignature) {
+      return res.json({
+        valid: false,
+        reason: 'FORGED',
+        message: 'QR 코드가 위조되었습니다'
+      });
+    }
+
+    // 3. 주문 조회
+    const order = await db.orders.findOne({
+      where: { orderId: payload.orderId }
+    });
+
+    if (!order) {
+      return res.json({
+        valid: false,
+        reason: 'NOT_FOUND',
+        message: '주문을 찾을 수 없습니다'
+      });
+    }
+
+    // 4. 시설 확인
+    if (order.facilityId !== facilityId) {
+      return res.json({
+        valid: false,
+        reason: 'WRONG_FACILITY',
+        message: '다른 식당의 주문입니다'
+      });
+    }
+
+    // 5. 상태 확인
+    if (order.status === 'COMPLETED') {
+      return res.json({
+        valid: false,
+        reason: 'ALREADY_USED',
+        message: '이미 사용된 주문입니다'
+      });
+    }
+
+    if (order.status !== 'QR_ACTIVE') {
+      return res.json({
+        valid: false,
+        reason: 'INACTIVE',
+        message: 'QR이 활성화되지 않았습니다'
+      });
+    }
+
+    // 6. 유효시간 확인
+    const now = new Date();
+    const expiresAt = new Date(payload.expiresAt);
+
+    if (now > expiresAt) {
+      // 만료 처리
+      await db.orders.update({
+        where: { orderId: order.orderId },
+        data: {
+          status: 'QR_EXPIRED',
+          qrCode: null,
+          qrActivatedAt: null,
+          qrExpiresAt: null
+        }
+      });
+
+      return res.json({
+        valid: false,
+        reason: 'EXPIRED',
+        message: 'QR 코드가 만료되었습니다'
+      });
+    }
+
+    // 7. QR 코드 일치 확인
+    if (order.qrCode !== qrCode) {
+      return res.json({
+        valid: false,
+        reason: 'MISMATCH',
+        message: 'QR 코드가 일치하지 않습니다'
+      });
+    }
+
+    // 8. 주문 완료 처리
+    await db.orders.update({
+      where: { orderId: order.orderId },
+      data: {
+        status: 'COMPLETED',
+        completedAt: now
+      }
+    });
+
+    // 9. 성공 응답
+    res.json({
+      valid: true,
+      order: {
+        orderNumber: order.orderNumber,
+        items: order.items,
+        totalAmount: order.totalAmount,
+        customerName: order.customerName || '고객'
+      }
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      valid: false,
+      reason: 'SERVER_ERROR',
+      message: '서버 오류가 발생했습니다'
+    });
+  }
+});
+
+6. 데이터베이스 스키마 (SQLite)
+sql-- 주문 테이블
+CREATE TABLE orders (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  order_id TEXT UNIQUE NOT NULL,
+  order_number INTEGER NOT NULL,
+  user_id TEXT,
+  
+  -- 시설 정보
+  facility_id TEXT NOT NULL,
+  facility_name TEXT NOT NULL,
+  corner_id TEXT NOT NULL,
+  corner_type TEXT NOT NULL,
+  
+  -- 주문 항목 (JSON)
+  items TEXT NOT NULL,
+  total_amount INTEGER NOT NULL,
+  
+  -- 결제 정보
+  payment_method TEXT NOT NULL,
+  payment_id TEXT,
+  
+  -- 상태
+  status TEXT NOT NULL DEFAULT 'PENDING',
+  -- PENDING, PAID, QR_ACTIVE, QR_EXPIRED, COMPLETED, CANCELLED
+  
+  -- QR 관련
+  activation_token TEXT NOT NULL,
+  qr_code TEXT,
+  qr_activated_at DATETIME,
+  qr_expires_at DATETIME,
+  
+  -- 수령 시간
+  pickup_type TEXT NOT NULL,
+  pickup_time DATETIME,
+  
+  -- 타임스탬프
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  paid_at DATETIME,
+  completed_at DATETIME,
+  cancelled_at DATETIME,
+  
+  FOREIGN KEY (facility_id) REFERENCES facilities(id)
+);
+
+-- 인덱스
+CREATE INDEX idx_orders_user ON orders(user_id);
+CREATE INDEX idx_orders_status ON orders(status);
+CREATE INDEX idx_orders_facility ON orders(facility_id);
+CREATE INDEX idx_orders_qr_expires ON orders(qr_expires_at);
+
+7. 프론트엔드 Hooks
+7.1 주문 관리 훅
+javascript// hooks/useOrders.js
+import { useState, useEffect } from 'react';
+
+export const useOrders = () => {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // 주문 목록 조회
+  const fetchOrders = async () => {
+    try {
+      const response = await fetch('/api/orders/my');
+      const data = await response.json();
+      setOrders(data.orders);
+    } catch (error) {
+      console.error('Failed to fetch orders:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOrders();
+    
+    // 30초마다 폴링
+    const interval = setInterval(fetchOrders, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // 주문 생성
+  const createOrder = async (orderData) => {
+    const response = await fetch('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(orderData)
+    });
+    return response.json();
+  };
+
+  // QR 활성화
+  const activateQR = async (orderId, userLocation) => {
+    const response = await fetch(`/api/orders/${orderId}/activate-qr`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userLocation })
+    });
+    const result = await response.json();
+    
+    if (result.success) {
+      // 로컬 상태 업데이트
+      setOrders(prev => prev.map(order =>
+        order.orderId === orderId
+          ? {
+              ...order,
+              status: 'QR_ACTIVE',
+              qrCode: result.qrCode,
+              qrActivatedAt: result.activatedAt,
+              qrExpiresAt: result.expiresAt
+            }
+          : order
+      ));
+    }
+    
+    return result;
+  };
+
+  // 주문 취소
+  const cancelOrder = async (orderId) => {
+    const response = await fetch(`/api/orders/${orderId}/cancel`, {
+      method: 'POST'
+    });
+    const result = await response.json();
+    
+    if (result.success) {
+      await fetchOrders(); // 새로고침
+    }
+    
+    return result;
+  };
+
+  const activeOrders = orders.filter(o => 
+    ['PAID', 'QR_ACTIVE'].includes(o.status)
+  );
+
+  const completedOrders = orders.filter(o => 
+    o.status === 'COMPLETED'
+  );
+
+  return {
+    orders,
+    activeOrders,
+    completedOrders,
+    loading,
+    createOrder,
+    activateQR,
+    cancelOrder,
+    refetch: fetchOrders
+  };
+};
+7.2 장바구니 훅
+javascript// hooks/useCart.js
+import { useState, useEffect } from 'react';
+
+export const useCart = () => {
+  const [items, setItems] = useState([]);
+
+  // 로컬스토리지에서 불러오기
+  useEffect(() => {
+    const saved = localStorage.getItem('cart');
+    if (saved) {
+      setItems(JSON.parse(saved));
+    }
+  }, []);
+
+  // 로컬스토리지에 저장
+  useEffect(() => {
+    localStorage.setItem('cart', JSON.stringify(items));
+  }, [items]);
+
+  // 아이템 추가
+  const addItem = (item) => {
+    setItems(prev => {
+      const existing = prev.find(i => i.id === item.id);
+      if (existing) {
+        return prev.map(i =>
+          i.id === item.id
+            ? { ...i, quantity: i.quantity + 1 }
+            : i
+        );
+      }
+      return [...prev, { ...item, quantity: 1 }];
+    });
+  };
+
+  // 수량 증가
+  const increaseQuantity = (itemId) => {
+    setItems(prev => prev.map(i =>
+      i.id === itemId && i.quantity < 5
+        ? { ...i, quantity: i.quantity + 1 }
+        : i
+    ));
+  };
+
+  // 수량 감소
+  const decreaseQuantity = (itemId) => {
+    setItems(prev => prev.map(i =>
+      i.id === itemId && i.quantity > 1
+        ? { ...i, quantity: i.quantity - 1 }
+        : i
+    ));
+  };
+
+  // 아이템 제거
+  const removeItem = (itemId) => {
+    setItems(prev => prev.filter(i => i.id !== itemId));
+  };
+
+  // 장바구니 비우기
+  const clearCart = () => {
+    setItems([]);
+  };
+
+  // 총 금액
+  const totalAmount = items.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0
+  );
+
+  return {
+    items,
+    totalAmount,
+    addItem,
+    increaseQuantity,
+    decreaseQuantity,
+    removeItem,
+    clearCart
+  };
+};
+
+8. 식당 측 스캐너 앱 (태블릿용)
+jsx// pages/Scanner.jsx
+
+const ScannerPage = () => {
+  const [scanning, setScanning] = useState(false);
+  const [lastOrder, setLastOrder] = useState(null);
+  const [error, setError] = useState(null);
+
+  const handleScan = async (qrCode) => {
+    try {
+      setError(null);
+
+      // QR 검증 요청
+      const response = await fetch('/api/orders/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          qrCode,
+          facilityId: FACILITY_ID // 태블릿별 설정
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.valid) {
+        // 성공
+        setLastOrder(result.order);
+        playSuccessSound();
+        navigator.vibrate?.([200, 100, 200, 100, 200]);
+        
+        // 3초 후 자동으로 다음 스캔 준비
+        setTimeout(() => {
+          setLastOrder(null);
+          setScanning(true);
+        }, 3000);
+      } else {
+        // 실패
+        setError(result.message);
+        playErrorSound();
+        navigator.vibrate?.([500]);
+      }
+    } catch (error) {
+      setError('QR 코드 검증 실패');
+      playErrorSound();
+    }
+  };
+
+  return (
+    <div className="h-screen flex flex-col bg-gray-100">
+      {/* 상단: 식당 정보 */}
+      <header className="bg-blue-600 text-white p-4">
+        <h1 className="text-xl font-bold">학생복지관 (한양플라자)</h1>
+        <p className="text-sm opacity-90">양식 코너 - QR 스캐너</p>
+      </header>
+
+      {/* 중앙: 카메라 또는 결과 */}
+      <div className="flex-1 relative">
+        {scanning && !lastOrder && !error && (
+          <div className="h-full bg-black">
+            <QrReader
+              onResult={(result) => {
+                if (result) {
+                  handleScan(result?.text);
+                  setScanning(false);
+                }
+              }}
+              constraints={{ facingMode: 'environment' }}
+              className="w-full h-full"
+            />
+            
+            {/* 스캔 가이드 */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="w-64 h-64 border-4 border-white rounded-2xl" />
+              <p className="absolute bottom-20 text-white text-lg font-semibold">
+                QR 코드를 화면 중앙에 맞춰주세요
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* 성공 화면 */}
+        {lastOrder && (
+          <div className="h-full bg-green-50 flex items-center justify-center p-8">
+            <div className="max-w-md w-full">
+              <div className="text-center mb-6">
+                <div className="mx-auto mb-4 h-24 w-24 rounded-full bg-green-100 flex items-center justify-center animate-scale">
+                  <CheckCircle className="h-16 w-16 text-green-600" />
+                </div>
+                <h2 className="text-3xl font-bold text-green-900 mb-2">
+                  주문 확인 완료
+                </h2>
+                <p className="text-lg text-green-700">
+                  음식을 제공해주세요
+                </p>
+              </div>
+
+              <Card className="border-2 border-green-200">
+                <CardContent className="p-6">
+                  <div className="text-center mb-4">
+                    <p className="text-sm text-gray-600 mb-1">주문번호</p>
+                    <p className="text-5xl font-bold text-blue-600">
+                      #{lastOrder.orderNumber}
+                    </p>
+                  </div>
+
+                  <Separator className="my-4" />
+
+                  <div className="space-y-2">
+                    {lastOrder.items.map((item, index) => (
+                      <div key={index} className="flex justify-between items-center">
+                        <span className="text-2xl font-semibold">
+                          {item.menu}
+                        </span>
+                        <span className="text-2xl text-gray-600">
+                          x{item.quantity}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <Separator className="my-4" />
+
+                  <div className="flex justify-between items-center">
+                    <span className="text-lg text-gray-600">총 금액</span>
+                    <span className="text-2xl font-bold">
+                      ₩{lastOrder.totalAmount.toLocaleString()}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        )}
+
+        {/* 에러 화면 */}
+        {error && (
+          <div className="h-full bg-red-50 flex items-center justify-center p-8">
+            <div className="max-w-md w-full text-center">
+              <div className="mx-auto mb-4 h-24 w-24 rounded-full bg-red-100 flex items-center justify-center">
+                <XCircle className="h-16 w-16 text-red-600" />
+              </div>
+              <h2 className="text-3xl font-bold text-red-900 mb-2">
+                검증 실패
+              </h2>
+              <p className="text-lg text-red-700 mb-6">
+                {error}
+              </p>
+              <Button
+                size="lg"
+                onClick={() => {
+                  setError(null);
+                  setScanning(true);
+                }}
+              >
+                다시 스캔
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* 대기 화면 */}
+        {!scanning && !lastOrder && !error && (
+          <div className="h-full flex items-center justify-center">
+            <div className="text-center">
+              <QrCode className="w-32 h-32 text-gray-300 mx-auto mb-4" />
+              <p className="text-xl text-gray-500">스캔 대기 중</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 하단: 스캔 버튼 */}
+      <div className="p-4 bg-white border-t">
+        {!scanning && !lastOrder && (
+          <Button
+            className="w-full h-16 text-xl"
+            onClick={() => setScanning(true)}
+          >
+            <QrCode className="w-6 h-6 mr-2" />
+            QR 스캔 시작
+          </Button>
+        )}
+        {scanning && (
+          <Button
+            variant="outline"
+            className="w-full h-16 text-xl"
+            onClick={() => setScanning(false)}
+          >
+            스캔 중지
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+9. 시뮬레이션 (Replit용)
+9.1 결제 시뮬레이션
+javascript// utils/paymentSimulator.js
+
+export const simulatePayment = async (paymentMethod, amount) => {
+  // 2초 대기 (결제 처리 시뮬레이션)
+  await new Promise(resolve => setTimeout(resolve, 2000));
+
+  // 90% 확률로 성공
+  const success = Math.random() > 0.1;
+
+  if (success) {
+    return {
+      success: true,
+      paymentId: `PAY_${Date.now()}`,
+      amount,
+      method: paymentMethod
+    };
+  } else {
+    throw new Error('결제 실패');
+  }
+};
+9.2 QR 생성 시뮬레이션
+javascript// 실제 환경에서는 HMAC-SHA256 사용
+// Replit에서는 간단한 해시
+
+export const generateQRCode = (orderData) => {
+  const payload = {
+    ...orderData,
+    timestamp: Date.now(),
+    signature: btoa(`${orderData.orderId}-${Date.now()}`)
+  };
+
+  return btoa(JSON.stringify(payload));
+};
+
+10. 구현 순서
+Phase 1: 주문 시스템 기본 (2일)
+
+✅ 장바구니 UI
+✅ 장바구니 Hook (로컬스토리지)
+✅ 주문 생성 API
+✅ 결제 수단 선택 모달
+✅ 결제 시뮬레이션
+
+Phase 2: 식권 보관함 (1일)
+
+✅ 결제 완료 화면 (보관함 저장 안내)
+✅ 주문 목록 화면 ("주문" 탭 추가)
+✅ 주문 카드 컴포넌트
+✅ 하단 네비게이션 업데이트
+
+Phase 3: QR 활성화 (2일)
+
+✅ QR 활성화 플로우
+✅ GPS 현장 인증
+✅ QR 코드 생성
+✅ 3분 타이머 구현
+✅ QR 표시 모달
+
+Phase 4: QR 검증 (1일)
+
+✅ 식당 스캐너 앱
+✅ QR 검증 API
+✅ 주문 완료 처리
+✅ 성공/실패 피드백
+
+Phase 5: 추가 기능 (1일)
+
+✅ 주문 취소
+✅ 이용 내역
+✅ QR 만료 처리 (크론잡)
+✅ 재활성화 플로우
+
+총 예상 기간: 7일
+
+11. 보안 고려사항
+11.1 QR 위변조 방지
+javascript// HMAC-SHA256 서명
+import crypto from 'crypto';
+
+const generateSignature = (data) => {
+  const secret = process.env.QR_SECRET_KEY;
+  return crypto
+    .createHmac('sha256', secret)
+    .update(JSON.stringify(data))
+    .digest('hex');
+};
+11.2 GPS 스푸핑 대응
+
+프론트엔드 GPS는 참고용
+중요한 검증은 서버에서 추가 확인
+의심스러운 패턴 모니터링
+
+11.3 QR 재사용 방지
+
+스캔 즉시 DB 상태 업데이트
+트랜잭션 처리로 동시 스캔 방지
+
+
+산출물 요약
+✅ 완전히 작동하는 기능
+
+주문 시스템: 메뉴 선택 → 장바구니 → 결제
+식권 보관함: 결제 완료 후 안전 보관
+QR 활성화: GPS 인증 → 3분 타이머
+QR 검증: 식당 스캐너 → 주문 완료
+주문 관리: 목록/취소/이용내역
+
+⚠️ 시뮬레이션 (실제 연동 대기)
+
+결제 PG: 카카오/토스 연동 대기 (현재 시뮬레이션)
+HMAC 서명: 단순 해시 사용 (실제론 HMAC-SHA256)
+
+🎯 핵심 차별점
+
+✅ 대기줄 건너뛰기
+✅ 미리 주문 가능
+✅ GPS 기반 현장 인증
+✅ 3분 제한으로 보안 강화
+✅ 무제한 재활성화

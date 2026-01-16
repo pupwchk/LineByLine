@@ -102,3 +102,76 @@ export const userSchema = z.object({
 export type User = z.infer<typeof userSchema>;
 
 export type InsertUser = Omit<User, "id">;
+
+// Order System Types
+export const OrderStatus = z.enum(["PENDING", "PAID", "QR_ACTIVE", "QR_EXPIRED", "COMPLETED", "CANCELLED"]);
+export type OrderStatus = z.infer<typeof OrderStatus>;
+
+export const cartItemSchema = z.object({
+  id: z.string(),
+  menuId: z.string(),
+  menu: z.string(),
+  quantity: z.number().min(1).max(5),
+  price: z.number(),
+  facilityId: z.string(),
+  facilityName: z.string(),
+  cornerId: z.string(),
+  cornerType: z.string(),
+});
+export type CartItem = z.infer<typeof cartItemSchema>;
+
+export const orderItemSchema = z.object({
+  id: z.string(),
+  menuId: z.string(),
+  menu: z.string(),
+  quantity: z.number(),
+  price: z.number(),
+});
+export type OrderItem = z.infer<typeof orderItemSchema>;
+
+export const orderSchema = z.object({
+  id: z.string(),
+  orderId: z.string(),
+  orderNumber: z.number(),
+  
+  facilityId: z.string(),
+  facilityName: z.string(),
+  facilityLocation: locationSchema,
+  cornerId: z.string(),
+  cornerType: z.string(),
+  
+  items: z.array(orderItemSchema),
+  totalAmount: z.number(),
+  
+  paymentMethod: z.string().optional(),
+  paymentId: z.string().optional(),
+  
+  status: OrderStatus,
+  
+  qrCode: z.string().nullable(),
+  qrActivatedAt: z.string().nullable(),
+  qrExpiresAt: z.string().nullable(),
+  
+  pickupType: z.enum(["now", "scheduled"]),
+  pickupTime: z.string(),
+  
+  createdAt: z.string(),
+  paidAt: z.string().nullable(),
+  completedAt: z.string().nullable(),
+  cancelledAt: z.string().nullable(),
+});
+export type Order = z.infer<typeof orderSchema>;
+
+export const insertOrderSchema = z.object({
+  facilityId: z.string(),
+  facilityName: z.string(),
+  facilityLocation: locationSchema,
+  cornerId: z.string(),
+  cornerType: z.string(),
+  items: z.array(orderItemSchema),
+  totalAmount: z.number(),
+  pickupType: z.enum(["now", "scheduled"]),
+  pickupTime: z.string(),
+  paymentMethod: z.string(),
+});
+export type InsertOrder = z.infer<typeof insertOrderSchema>;

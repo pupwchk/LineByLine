@@ -1,4 +1,4 @@
-import type { Facility, Waiting, InsertWaiting, HistoryItem, Corner } from "@shared/schema";
+import type { Facility, Waiting, InsertWaiting, HistoryItem, Corner, Order, InsertOrder, Location } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -9,6 +9,14 @@ export interface IStorage {
   cancelWaiting(sessionId: string): Promise<boolean>;
   getWaitingHistory(sessionId: string): Promise<HistoryItem[]>;
   updateCongestion(): void;
+  
+  // Order methods
+  createOrder(sessionId: string, data: InsertOrder): Promise<Order>;
+  getOrders(sessionId: string): Promise<Order[]>;
+  getOrder(orderId: string): Promise<Order | undefined>;
+  activateQR(orderId: string, userLocation: { lat: number; lng: number }): Promise<{ success: boolean; order?: Order; message?: string; distance?: number }>;
+  cancelOrder(orderId: string): Promise<boolean>;
+  completeOrder(orderId: string): Promise<boolean>;
 }
 
 const mockFacilities: Facility[] = [
@@ -174,18 +182,56 @@ const mockFacilities: Facility[] = [
 ];
 
 let waitingCounter = 100;
+let orderCounter = 1000;
+
+function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371e3;
+  const φ1 = lat1 * Math.PI / 180;
+  const φ2 = lat2 * Math.PI / 180;
+  const Δφ = (lat2 - lat1) * Math.PI / 180;
+  const Δλ = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
 
 export class MemStorage implements IStorage {
   private facilities: Facility[];
   private waitings: Map<string, Waiting>;
   private history: Map<string, HistoryItem[]>;
+  private orders: Map<string, Order[]>;
+  private allOrders: Map<string, Order>;
 
   constructor() {
     this.facilities = JSON.parse(JSON.stringify(mockFacilities));
     this.waitings = new Map();
     this.history = new Map();
+    this.orders = new Map();
+    this.allOrders = new Map();
 
     setInterval(() => this.updateCongestion(), 30000);
+    setInterval(() => this.checkExpiredQRs(), 10000);
+  }
+  
+  private checkExpiredQRs(): void {
+    const now = new Date();
+    this.allOrders.forEach((order, orderId) => {
+      if (order.status === "QR_ACTIVE" && order.qrExpiresAt) {
+        const expiresAt = new Date(order.qrExpiresAt);
+        if (now > expiresAt) {
+          const updatedOrder: Order = {
+            ...order,
+            status: "QR_EXPIRED",
+            qrCode: null,
+            qrActivatedAt: null,
+            qrExpiresAt: null,
+          };
+          this.allOrders.set(orderId, updatedOrder);
+        }
+      }
+    });
   }
 
   async getFacilities(): Promise<Facility[]> {
@@ -270,6 +316,145 @@ export class MemStorage implements IStorage {
         });
       }
     });
+  }
+
+  async createOrder(sessionId: string, data: InsertOrder): Promise<Order> {
+    orderCounter++;
+    const now = new Date();
+    const orderId = `ORD_${now.toISOString().slice(0, 10).replace(/-/g, "")}_${String(orderCounter).padStart(6, "0")}`;
+    
+    const order: Order = {
+      id: randomUUID(),
+      orderId,
+      orderNumber: orderCounter,
+      facilityId: data.facilityId,
+      facilityName: data.facilityName,
+      facilityLocation: data.facilityLocation,
+      cornerId: data.cornerId,
+      cornerType: data.cornerType,
+      items: data.items,
+      totalAmount: data.totalAmount,
+      paymentMethod: data.paymentMethod,
+      status: "PAID",
+      qrCode: null,
+      qrActivatedAt: null,
+      qrExpiresAt: null,
+      pickupType: data.pickupType,
+      pickupTime: data.pickupTime,
+      createdAt: now.toISOString(),
+      paidAt: now.toISOString(),
+      completedAt: null,
+      cancelledAt: null,
+    };
+
+    const existingOrders = this.orders.get(sessionId) || [];
+    this.orders.set(sessionId, [order, ...existingOrders]);
+    this.allOrders.set(order.orderId, order);
+    
+    return order;
+  }
+
+  async getOrders(sessionId: string): Promise<Order[]> {
+    const orders = this.orders.get(sessionId) || [];
+    return orders.map(order => {
+      const latestOrder = this.allOrders.get(order.orderId);
+      return latestOrder || order;
+    });
+  }
+
+  async getOrder(orderId: string): Promise<Order | undefined> {
+    return this.allOrders.get(orderId);
+  }
+
+  async activateQR(orderId: string, userLocation: { lat: number; lng: number }): Promise<{ success: boolean; order?: Order; message?: string; distance?: number }> {
+    const order = this.allOrders.get(orderId);
+    if (!order) {
+      return { success: false, message: "주문을 찾을 수 없습니다" };
+    }
+
+    if (order.status === "COMPLETED") {
+      return { success: false, message: "이미 사용된 주문입니다" };
+    }
+
+    if (order.status === "CANCELLED") {
+      return { success: false, message: "취소된 주문입니다" };
+    }
+
+    if (order.status !== "PAID" && order.status !== "QR_EXPIRED") {
+      return { success: false, message: "활성화할 수 없는 상태입니다" };
+    }
+
+    const distance = calculateDistance(
+      userLocation.lat,
+      userLocation.lng,
+      order.facilityLocation.lat,
+      order.facilityLocation.lng
+    );
+
+    if (distance > 50) {
+      return { 
+        success: false, 
+        message: `식당에서 ${Math.round(distance)}m 떨어져 있습니다. 50m 이내로 이동해주세요.`,
+        distance: Math.round(distance)
+      };
+    }
+
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 3 * 60 * 1000);
+    
+    const qrPayload = {
+      orderId: order.orderId,
+      orderNumber: order.orderNumber,
+      facilityId: order.facilityId,
+      activatedAt: now.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+    };
+    
+    const qrCode = Buffer.from(JSON.stringify(qrPayload)).toString("base64");
+
+    const updatedOrder: Order = {
+      ...order,
+      status: "QR_ACTIVE",
+      qrCode,
+      qrActivatedAt: now.toISOString(),
+      qrExpiresAt: expiresAt.toISOString(),
+    };
+
+    this.allOrders.set(orderId, updatedOrder);
+    
+    return { success: true, order: updatedOrder };
+  }
+
+  async cancelOrder(orderId: string): Promise<boolean> {
+    const order = this.allOrders.get(orderId);
+    if (!order) return false;
+    
+    if (order.status === "COMPLETED") return false;
+
+    const updatedOrder: Order = {
+      ...order,
+      status: "CANCELLED",
+      cancelledAt: new Date().toISOString(),
+    };
+
+    this.allOrders.set(orderId, updatedOrder);
+    return true;
+  }
+
+  async completeOrder(orderId: string): Promise<boolean> {
+    const order = this.allOrders.get(orderId);
+    if (!order) return false;
+    
+    if (order.status !== "QR_ACTIVE") return false;
+
+    const updatedOrder: Order = {
+      ...order,
+      status: "COMPLETED",
+      completedAt: new Date().toISOString(),
+    };
+
+    this.allOrders.set(orderId, updatedOrder);
+    return true;
   }
 }
 

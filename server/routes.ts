@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
-import { insertWaitingSchema } from "@shared/schema";
+import { insertWaitingSchema, insertOrderSchema } from "@shared/schema";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -129,6 +129,89 @@ export async function registerRoutes(
       res.json({ history });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch history" });
+    }
+  });
+
+  // Order API routes
+  app.post("/api/orders", async (req, res) => {
+    try {
+      const sessionId = req.sessionID || "guest";
+      
+      const result = insertOrderSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ error: "Invalid request data", details: result.error.issues });
+      }
+
+      const order = await storage.createOrder(sessionId, result.data);
+      res.status(201).json({ success: true, order });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create order" });
+    }
+  });
+
+  app.get("/api/orders", async (req, res) => {
+    try {
+      const sessionId = req.sessionID || "guest";
+      const orders = await storage.getOrders(sessionId);
+      res.json({ orders });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch orders" });
+    }
+  });
+
+  app.get("/api/orders/:orderId", async (req, res) => {
+    try {
+      const order = await storage.getOrder(req.params.orderId);
+      if (!order) {
+        return res.status(404).json({ error: "Order not found" });
+      }
+      res.json({ order });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch order" });
+    }
+  });
+
+  app.post("/api/orders/:orderId/activate-qr", async (req, res) => {
+    try {
+      const { userLocation } = req.body;
+      
+      if (!userLocation || typeof userLocation.lat !== "number" || typeof userLocation.lng !== "number") {
+        return res.status(400).json({ success: false, message: "위치 정보가 필요합니다" });
+      }
+
+      const result = await storage.activateQR(req.params.orderId, userLocation);
+      
+      if (!result.success) {
+        return res.json(result);
+      }
+
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ success: false, message: "서버 오류가 발생했습니다" });
+    }
+  });
+
+  app.post("/api/orders/:orderId/cancel", async (req, res) => {
+    try {
+      const success = await storage.cancelOrder(req.params.orderId);
+      if (!success) {
+        return res.status(400).json({ success: false, message: "주문을 취소할 수 없습니다" });
+      }
+      res.json({ success: true, message: "주문이 취소되었습니다" });
+    } catch (error) {
+      res.status(500).json({ success: false, message: "서버 오류가 발생했습니다" });
+    }
+  });
+
+  app.post("/api/orders/:orderId/complete", async (req, res) => {
+    try {
+      const success = await storage.completeOrder(req.params.orderId);
+      if (!success) {
+        return res.status(400).json({ success: false, message: "주문을 완료할 수 없습니다" });
+      }
+      res.json({ success: true, message: "주문이 완료되었습니다" });
+    } catch (error) {
+      res.status(500).json({ success: false, message: "서버 오류가 발생했습니다" });
     }
   });
 
