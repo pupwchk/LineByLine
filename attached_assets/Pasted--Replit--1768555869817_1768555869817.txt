@@ -1,0 +1,1977 @@
+줄없냥 - 캠퍼스 실시간 혼잡도 및 대기 관리 웹앱 (Replit 프로토타입)
+프로젝트 개요
+대학교 교내 시설(식당, 도서관, 헬스장 등)의 실시간 혼잡도를 시각적으로 표시하고, GPS 기반 현장 인증을 통한 대기 등록 시스템을 제공하는 모바일 최적화 웹 애플리케이션입니다.
+핵심 가치
+
+"수업 사이 빈 시간에 맞춰, 줄 안 서고 밥 먹자"
+
+기술 스택
+
+Frontend: React 18 + Vite
+Styling: Tailwind CSS
+UI Components: shadcn/ui
+Icons: Lucide React
+Charts: Recharts
+State Management: React hooks + Context API
+Backend: Express.js + WebSocket
+Database: SQLite (lightweight, file-based)
+Cache: node-cache (in-memory)
+Location: Geolocation API
+Notifications: Web Push API
+
+
+구현 범위 (Replit 환경)
+✅ 완전히 구현되는 기능
+
+전체 UI/UX: 모든 화면, 컴포넌트, 애니메이션
+대기 시스템: 등록/조회/취소/알림 전체 플로우
+GPS 위치 인증: 프론트엔드 기반 거리 계산
+혼잡도 시각화: 5단계 컬러 바, 실시간 업데이트
+시간대별 통계: Recharts 기반 차트
+WebSocket: 실시간 데이터 푸시
+PWA 기본 설정: 홈 화면 추가 가능
+
+⚠️ 시뮬레이션으로 구현 (실제 연동은 추후)
+
+메뉴 데이터: 정적 JSON 파일 (크롤링은 추후 외부 서버에서)
+혼잡도 데이터: 시간대별 패턴 + 랜덤 변동 (YOLO는 추후 Edge device에서)
+실시간 분석: 시뮬레이션된 인원 카운트
+
+❌ 제외 (추후 외부 시스템 연동)
+
+YOLO v11 실시간 영상 분석
+실제 CCTV RTSP 스트림 연동
+fnb.hanyang.ac.kr 크롤링 (차단 위험)
+
+
+핵심 기능 요구사항
+1. 레이아웃 구조
+┌─────────────────────────────────┐
+│  Header (날짜 네비게이션)        │ ← sticky
+├─────────────────────────────────┤
+│                                 │
+│  Main Content                   │
+│  (스크롤 가능)                   │
+│                                 │
+├─────────────────────────────────┤
+│  Bottom Navigation              │ ← fixed
+│  🏠 홈 | ⏳ 내 대기 | 👤 MY     │
+└─────────────────────────────────┘
+
+모바일 우선 반응형 (max-width: 32rem / 512px)
+Sticky 헤더 + 하단 네비게이션
+부드러운 스크롤 (smooth scroll behavior)
+터치 제스처 최적화
+
+2. 헤더 영역
+jsx<header className="sticky top-0 z-50 backdrop-blur-lg bg-white/80 border-b">
+  <div className="flex items-center justify-between px-4 py-3">
+    <Button variant="ghost" size="icon">
+      <ChevronLeft />
+    </Button>
+    <h1 className="font-semibold">1월 16일 (금)</h1>
+    <Button variant="ghost" size="icon">
+      <ChevronRight />
+    </Button>
+  </div>
+</header>
+기능:
+
+좌/우 화살표로 날짜 이동 (±1일)
+현재 날짜 중앙 표시
+반투명 블러 배경
+
+3. 홈 화면 구조
+3.1 상단 요약 배너 (대기 중일 때만 표시)
+jsx{activeWaiting && (
+  <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4">
+    <p className="text-sm font-medium">
+      {facility.name} {corner.type} 코너 · {waitingNumber}번 대기 중
+    </p>
+    <p className="text-xs text-gray-600">
+      약 {estimatedTime}분 후 입장
+    </p>
+  </div>
+)}
+3.2 시설 타입 필터 탭
+jsx<Tabs defaultValue="all" className="mb-4">
+  <TabsList className="grid w-full grid-cols-5">
+    <TabsTrigger value="all">전체</TabsTrigger>
+    <TabsTrigger value="cafeteria">🍽️ 식당</TabsTrigger>
+    <TabsTrigger value="library">📚 도서관</TabsTrigger>
+    <TabsTrigger value="gym">💪 헬스장</TabsTrigger>
+    <TabsTrigger value="etc">기타</TabsTrigger>
+  </TabsList>
+</Tabs>
+3.3 데이터 타임스탬프
+jsx<p className="text-center text-xs text-gray-500 mb-4">
+  데이터 시각: {formatTime(lastUpdate)}
+  <span className="ml-2 inline-flex items-center">
+    <span className="animate-pulse h-2 w-2 rounded-full bg-green-500 mr-1" />
+    실시간
+  </span>
+</p>
+3.4 시설 섹션
+각 시설마다:
+jsx<section className="mb-6">
+  {/* 시설 헤더 */}
+  <div className="flex items-center justify-between mb-3">
+    <div className="flex items-center gap-2">
+      <h2 className="font-bold text-lg">{facility.name}</h2>
+      <Badge variant="secondary">{facilityType}</Badge>
+    </div>
+    <div className="flex gap-2">
+      <Button variant="ghost" size="sm">
+        <MapPin className="w-4 h-4 mr-1" />
+        위치
+      </Button>
+      <Button variant="ghost" size="sm">
+        <Clock className="w-4 h-4 mr-1" />
+        운영시간
+      </Button>
+    </div>
+  </div>
+
+  {/* 코너 카드 리스트 */}
+  <div className="space-y-3">
+    {facility.corners.map(corner => (
+      <CongestionCard key={corner.id} corner={corner} />
+    ))}
+  </div>
+</section>
+4. 혼잡도 카드 컴포넌트 (핵심)
+jsx<Card className="hover:-translate-y-1 transition-transform cursor-pointer">
+  <CardContent className="p-4">
+    <div className="flex justify-between items-start mb-3">
+      {/* 좌측: 코너 정보 */}
+      <div className="flex-1">
+        <Badge variant="outline" className="mb-2">
+          {corner.type}
+        </Badge>
+        <h3 className="font-semibold text-lg mb-1 line-clamp-1">
+          {corner.menu}
+        </h3>
+        {corner.price && (
+          <p className="text-sm text-gray-600">₩{corner.price.toLocaleString()}</p>
+        )}
+      </div>
+
+      {/* 우측: 혼잡도 바 */}
+      <div className="ml-4">
+        <CongestionBar level={corner.congestion} />
+        <p className="text-xs text-right mt-1 font-medium">
+          {getStatusText(corner.congestion)}
+        </p>
+      </div>
+    </div>
+
+    {/* 하단: 대기시간 + 버튼 */}
+    <div className="flex justify-between items-center">
+      <p className="text-sm text-gray-600">
+        예상 대기: <span className="font-semibold">{corner.waitTime}분</span>
+      </p>
+      <Button 
+        size="sm" 
+        onClick={() => handleRegister(corner)}
+        disabled={corner.congestion >= 5}
+      >
+        대기 등록
+      </Button>
+    </div>
+  </CardContent>
+</Card>
+CongestionBar 컴포넌트:
+jsxconst CongestionBar = ({ level }) => {
+  const config = {
+    1: { color: 'bg-emerald-500', bars: 1 },
+    2: { color: 'bg-lime-500', bars: 2 },
+    3: { color: 'bg-yellow-500', bars: 3 },
+    4: { color: 'bg-orange-500', bars: 4 },
+    5: { color: 'bg-red-500', bars: 5 }
+  };
+
+  const { color, bars } = config[level];
+
+  return (
+    <div className="flex gap-1">
+      {[1, 2, 3, 4, 5].map(i => (
+        <div
+          key={i}
+          className={`w-1.5 h-6 rounded-full ${
+            i <= bars ? color : 'bg-gray-200'
+          }`}
+        />
+      ))}
+    </div>
+  );
+};
+
+5. 대기 등록 플로우
+5.1 GPS 현장 인증 (프론트엔드)
+javascriptconst verifyLocation = async (facilityLat, facilityLng) => {
+  // 1. 사용자 위치 가져오기
+  const position = await new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy: true,
+      timeout: 5000,
+      maximumAge: 0
+    });
+  });
+
+  const { latitude: userLat, longitude: userLng } = position.coords;
+
+  // 2. Haversine 공식으로 거리 계산
+  const R = 6371e3; // 지구 반경 (미터)
+  const φ1 = userLat * Math.PI / 180;
+  const φ2 = facilityLat * Math.PI / 180;
+  const Δφ = (facilityLat - userLat) * Math.PI / 180;
+  const Δλ = (facilityLng - userLng) * Math.PI / 180;
+
+  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ/2) * Math.sin(Δλ/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  const distance = R * c;
+
+  // 3. 50m 이내 확인
+  if (distance > 50) {
+    throw new Error('시설에서 50m 이내에서 등록해주세요.');
+  }
+
+  return { distance, verified: true };
+};
+테스트 모드 (개발 중):
+javascriptconst TEST_MODE = true; // 개발 중에는 true
+
+if (TEST_MODE) {
+  // 위치 검증 우회
+  return { distance: 0, verified: true };
+}
+5.2 대기 등록 확인 모달
+jsx<Dialog open={showConfirmModal}>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle>대기 등록 확인</DialogTitle>
+    </DialogHeader>
+    
+    <div className="space-y-4">
+      <div>
+        <p className="font-semibold">{facility.name}</p>
+        <p className="text-sm text-gray-600">{corner.type} - {corner.menu}</p>
+      </div>
+
+      <Separator />
+
+      <div className="grid grid-cols-2 gap-4 text-sm">
+        <div>
+          <p className="text-gray-600">현재 대기</p>
+          <p className="font-semibold text-lg">{currentQueue}명</p>
+        </div>
+        <div>
+          <p className="text-gray-600">예상 시간</p>
+          <p className="font-semibold text-lg">{waitTime}분</p>
+        </div>
+      </div>
+
+      <Alert>
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>
+          호출 후 5분 내 미응답 시 자동 취소됩니다.
+        </AlertDescription>
+      </Alert>
+    </div>
+
+    <DialogFooter>
+      <Button variant="outline" onClick={() => setShowConfirmModal(false)}>
+        취소
+      </Button>
+      <Button onClick={confirmRegistration}>
+        등록 확인
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+5.3 대기 등록 완료 화면
+jsx<Card className="mt-4 border-2 border-blue-500">
+  <CardHeader className="text-center pb-3">
+    <CardTitle className="text-4xl font-bold text-blue-600">
+      {waitingNumber}번
+    </CardTitle>
+    <CardDescription>내 대기번호</CardDescription>
+  </CardHeader>
+
+  <CardContent>
+    <div className="space-y-4">
+      {/* 현재 호출 번호 */}
+      <div className="text-center bg-gray-50 rounded-lg p-3">
+        <p className="text-sm text-gray-600 mb-1">현재 호출</p>
+        <p className="text-3xl font-bold">{currentCalling}번</p>
+      </div>
+
+      {/* 대기 상태 */}
+      <div className="flex items-center justify-center gap-2">
+        <Users className="w-5 h-5 text-gray-600" />
+        <p className="text-lg">
+          <span className="font-semibold">{waitingAhead}명</span> 앞에 대기 중
+        </p>
+      </div>
+
+      {/* 예상 시간 */}
+      <div className="flex items-center justify-center gap-2">
+        <Clock className="w-5 h-5 text-gray-600" />
+        <p className="text-lg">
+          약 <span className="font-semibold">{estimatedTime}분</span> 후 입장
+        </p>
+      </div>
+
+      {/* 등록 시간 */}
+      <p className="text-center text-xs text-gray-500">
+        {formatTime(registeredAt)} 등록
+      </p>
+    </div>
+  </CardContent>
+
+  <CardFooter>
+    <Button 
+      variant="destructive" 
+      className="w-full"
+      onClick={handleCancel}
+    >
+      대기 취소
+    </Button>
+  </CardFooter>
+</Card>
+
+6. 내 대기 화면 (내 대기 탭)
+jsxconst MyWaitingPage = () => {
+  const { activeWaiting } = useWaiting();
+
+  if (!activeWaiting) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh]">
+        <Clock className="w-16 h-16 text-gray-300 mb-4" />
+        <p className="text-gray-500">대기 중인 항목이 없습니다</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4 space-y-4">
+      {/* 활성 대기 카드 */}
+      <ActiveWaitingCard waiting={activeWaiting} />
+
+      {/* 대기 상태 타임라인 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">대기 진행 상황</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Timeline steps={[
+            { label: '등록 완료', status: 'complete' },
+            { label: '3번 전 알림', status: activeWaiting.waitingAhead <= 3 ? 'complete' : 'pending' },
+            { label: '1번 전 알림', status: activeWaiting.waitingAhead <= 1 ? 'complete' : 'pending' },
+            { label: '입장 호출', status: 'pending' }
+          ]} />
+        </CardContent>
+      </Card>
+
+      {/* 푸시 알림 설정 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">알림 설정</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label>3번 전 알림</Label>
+            <Switch checked={notifications.threeBefore} onCheckedChange={(v) => setNotifications({...notifications, threeBefore: v})} />
+          </div>
+          <div className="flex items-center justify-between">
+            <Label>1번 전 알림</Label>
+            <Switch checked={notifications.oneBefore} onCheckedChange={(v) => setNotifications({...notifications, oneBefore: v})} />
+          </div>
+          <div className="flex items-center justify-between">
+            <Label>호출 알림</Label>
+            <Switch checked disabled />
+            <span className="text-xs text-gray-500">(필수)</span>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+7. 시설 상세 화면
+jsxconst FacilityDetailPage = ({ facilityId }) => {
+  const facility = useFacility(facilityId);
+
+  return (
+    <div className="pb-20">
+      {/* 헤더 이미지 */}
+      <div className="relative h-48 bg-gradient-to-br from-blue-500 to-purple-600">
+        <div className="absolute inset-0 flex items-center justify-center">
+          <Utensils className="w-20 h-20 text-white/80" />
+        </div>
+      </div>
+
+      {/* 시설 정보 */}
+      <div className="p-4 space-y-4">
+        <div>
+          <h1 className="text-2xl font-bold mb-2">{facility.name}</h1>
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            <MapPin className="w-4 h-4" />
+            <span>{facility.location.address}</span>
+          </div>
+        </div>
+
+        {/* 현재 혼잡도 대형 표시 */}
+        <Card>
+          <CardContent className="p-6 text-center">
+            <p className="text-sm text-gray-600 mb-2">현재 혼잡도</p>
+            <div className="flex justify-center mb-3">
+              <CongestionBar level={facility.avgCongestion} size="large" />
+            </div>
+            <p className="text-2xl font-bold">
+              {getStatusText(facility.avgCongestion)}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* 메뉴 리스트 (식당인 경우) */}
+        {facility.type === 'CAFETERIA' && (
+          <Card>
+            <CardHeader>
+              <CardTitle>🍴 오늘의 메뉴</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {facility.corners.map(corner => (
+                <div key={corner.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                  <div className="flex-1">
+                    <Badge variant="outline" className="mb-1">{corner.type}</Badge>
+                    <p className="font-semibold">{corner.menu}</p>
+                  </div>
+                  <div className="text-right ml-4">
+                    <p className="font-semibold text-blue-600">
+                      ₩{corner.price.toLocaleString()}
+                    </p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <CongestionBar level={corner.congestion} size="small" />
+                      <span className="text-xs">{corner.waitTime}분</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 좌석 현황 (도서관인 경우) */}
+        {facility.type === 'LIBRARY' && (
+          <Card>
+            <CardHeader>
+              <CardTitle>📚 열람실 현황</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {facility.corners.map(corner => (
+                <div key={corner.id} className="flex justify-between items-center">
+                  <span className="font-medium">{corner.name}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm">
+                      {corner.available}/{corner.capacity}석
+                    </span>
+                    <CongestionBar level={corner.congestion} />
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 시간대별 혼잡도 차트 */}
+        <Card>
+          <CardHeader>
+            <CardTitle>📊 시간대별 혼잡도</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={facility.hourlyData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="hour" />
+                <YAxis domain={[1, 5]} ticks={[1, 2, 3, 4, 5]} />
+                <Tooltip />
+                <Line 
+                  type="monotone" 
+                  dataKey="congestion" 
+                  stroke="#3b82f6" 
+                  strokeWidth={2}
+                  dot={{ fill: '#3b82f6', r: 4 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* 운영시간 */}
+        <Card>
+          <CardHeader>
+            <CardTitle>🕐 운영시간</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-600">평일 중식</span>
+              <span className="font-medium">11:00 - 14:30</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">평일 석식</span>
+              <span className="font-medium">16:00 - 18:00</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">토요일</span>
+              <span className="font-medium">10:00 - 14:00</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">공휴일</span>
+              <span className="font-medium text-red-500">운영 없음</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+8. 마이페이지
+jsxconst MyPage = () => {
+  const [darkMode, setDarkMode] = useState(false);
+
+  return (
+    <div className="p-4 space-y-4">
+      {/* 프로필 (게스트 모드) */}
+      <Card>
+        <CardContent className="p-6 text-center">
+          <div className="w-20 h-20 rounded-full bg-gray-200 mx-auto mb-3 flex items-center justify-center">
+            <User className="w-10 h-10 text-gray-500" />
+          </div>
+          <p className="font-semibold text-lg">게스트</p>
+          <p className="text-sm text-gray-500">로그인하여 더 많은 기능 사용</p>
+          <Button className="mt-3" variant="outline" size="sm">
+            한양대 SSO 로그인
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* 이용 내역 */}
+      <Card>
+        <CardHeader>
+          <CardTitle>📝 최근 이용 내역</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {history.map(item => (
+              <div key={item.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                <div>
+                  <p className="font-medium">{item.facility}</p>
+                  <p className="text-xs text-gray-600">{item.date}</p>
+                </div>
+                <Badge variant={item.status === 'COMPLETED' ? 'success' : 'secondary'}>
+                  {item.statusText}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 노쇼 패널티 현황 */}
+      <Card>
+        <CardHeader>
+          <CardTitle>⚠️ 노쇼 패널티</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              현재 패널티 없음
+              <br />
+              <span className="text-xs text-gray-500">
+                노쇼 발생 시 10분간 재등록이 제한됩니다.
+              </span>
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+
+      {/* 설정 */}
+      <Card>
+        <CardHeader>
+          <CardTitle>⚙️ 설정</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>푸시 알림</Label>
+              <p className="text-xs text-gray-500">대기 호출 알림 받기</p>
+            </div>
+            <Switch defaultChecked />
+          </div>
+          <Separator />
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>다크모드</Label>
+              <p className="text-xs text-gray-500">테마 변경</p>
+            </div>
+            <Switch checked={darkMode} onCheckedChange={setDarkMode} />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 앱 정보 */}
+      <Card>
+        <CardContent className="p-4 text-center text-sm text-gray-500">
+          <p>줄없냥 v1.0.0</p>
+          <p className="text-xs mt-1">Made with ❤️ for Hanyang Students</p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+9. 데이터 구조
+9.1 정적 메뉴 데이터 (JSON 파일)
+javascript// data/facilities.json
+{
+  "date": "2026-01-16",
+  "lastUpdate": "2026-01-16T11:00:00",
+  "facilities": [
+    {
+      "id": "hanyang_plaza",
+      "name": "학생복지관 (한양플라자)",
+      "type": "CAFETERIA",
+      "location": {
+        "lat": 37.5575,
+        "lng": 127.0469,
+        "radius": 50,
+        "address": "한양대학교 학생복지관(한양플라자) 3층",
+        "building": "105"
+      },
+      "capacity": 300,
+      "avgServiceTime": 3,
+      "operatingHours": {
+        "weekday": {
+          "breakfast": { "open": "08:20", "close": "10:20" },
+          "lunch": { "open": "11:00", "close": "14:30" },
+          "dinner": { "open": "16:00", "close": "18:00" }
+        },
+        "saturday": {
+          "lunch": { "open": "10:00", "close": "14:00" }
+        },
+        "holiday": null
+      },
+      "corners": [
+        {
+          "id": "hanyang_plaza_yangshik",
+          "type": "양식",
+          "menu": "치즈돈까스",
+          "price": 4200,
+          "description": ""
+        },
+        {
+          "id": "hanyang_plaza_hanshik",
+          "type": "한식",
+          "menu": "소고기우거지탕",
+          "price": 4200,
+          "description": "바싹불고기 도토리묵무침 김치"
+        },
+        {
+          "id": "hanyang_plaza_jukseok",
+          "type": "즉석",
+          "menu": "순살닭한마리",
+          "price": 4500,
+          "description": "바싹불고기 도토리묵무침 김치"
+        },
+        {
+          "id": "hanyang_plaza_ramen",
+          "type": "라면",
+          "menu": "파마라면(공기밥+500원)",
+          "price": 3500,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "id": "materials",
+      "name": "신소재공학관 식당",
+      "type": "CAFETERIA",
+      "location": {
+        "lat": 37.5562,
+        "lng": 127.0445,
+        "radius": 50,
+        "address": "신소재공학관 7층",
+        "building": "204"
+      },
+      "capacity": 150,
+      "avgServiceTime": 3,
+      "corners": [
+        {
+          "id": "materials_jeongsik",
+          "type": "정식",
+          "menu": "부대찌개*라면사리",
+          "price": 6000,
+          "description": "흑미밥 야채춘권*칠리소스 메추리알곤약조림 고들빼기무침 배추김치"
+        },
+        {
+          "id": "materials_ilpum",
+          "type": "일품",
+          "menu": "탄탄면",
+          "price": 6500,
+          "description": "참치김가루주먹밥 핫도그*케찹 콘샐러드 단무지무침 배추김치"
+        }
+      ]
+    },
+    {
+      "id": "dorm2",
+      "name": "제2학생생활관 식당",
+      "type": "CAFETERIA",
+      "location": {
+        "lat": 37.5590,
+        "lng": 127.0480,
+        "radius": 50,
+        "address": "제2학생생활관 1층",
+        "building": "804"
+      },
+      "capacity": 200,
+      "avgServiceTime": 3,
+      "corners": [
+        {
+          "id": "dorm2_breakfast",
+          "type": "조식",
+          "menu": "심플떡갈비버거, 감자튀김*케찹, 요거톡, 바나나 오렌지주스",
+          "price": 4500
+        },
+        {
+          "id": "dorm2_lunch",
+          "type": "중식",
+          "menu": "고구마닭갈비",
+          "price": 4500,
+          "description": "쌀밥, 조랭떡미역국, 김말이튀김*초간장, 콘코울슬로, 배추김치"
+        },
+        {
+          "id": "dorm2_dinner",
+          "type": "석식",
+          "menu": "돈사태김치찜",
+          "price": 4500,
+          "description": "쌀밥, 시래기된장국, 왕교자만두튀김, 메추리알곤약조림, 깍두기"
+        }
+      ]
+    },
+    {
+      "id": "library_main",
+      "name": "백남학술정보관",
+      "type": "LIBRARY",
+      "location": {
+        "lat": 37.5571,
+        "lng": 127.0461,
+        "radius": 100,
+        "address": "한양대학교 백남학술정보관"
+      },
+      "corners": [
+        {
+          "id": "reading_room_1",
+          "type": "열람실",
+          "name": "제1열람실",
+          "capacity": 200
+        },
+        {
+          "id": "reading_room_2",
+          "type": "열람실",
+          "name": "제2열람실",
+          "capacity": 150
+        },
+        {
+          "id": "laptop_room",
+          "type": "노트북실",
+          "name": "노트북열람실",
+          "capacity": 80
+        }
+      ]
+    },
+    {
+      "id": "gym_fitness",
+      "name": "체육관 피트니스센터",
+      "type": "GYM",
+      "location": {
+        "lat": 37.5580,
+        "lng": 127.0475,
+        "radius": 50,
+        "address": "한양대학교 체육관 2층"
+      },
+      "capacity": 60
+    }
+  ]
+}
+9.2 시뮬레이션 혼잡도 생성 로직
+javascript// utils/congestionSimulator.js
+
+/**
+ * 시간대별 기본 혼잡도 패턴
+ */
+const TIME_PATTERNS = {
+  CAFETERIA: {
+    breakfast: { start: 8, end: 10, peakLevel: 3 },
+    lunch: { start: 11, end: 14, peakLevel: 4 },
+    dinner: { start: 17, end: 19, peakLevel: 4 }
+  },
+  LIBRARY: {
+    morning: { start: 9, end: 12, peakLevel: 2 },
+    afternoon: { start: 13, end: 18, peakLevel: 3 },
+    evening: { start: 19, end: 22, peakLevel: 4 }
+  },
+  GYM: {
+    morning: { start: 6, end: 9, peakLevel: 3 },
+    afternoon: { start: 17, end: 20, peakLevel: 5 }
+  }
+};
+
+/**
+ * 현재 시간 기반 기본 혼잡도 계산
+ */
+function getBaseCongestion(facilityType, currentHour) {
+  const patterns = TIME_PATTERNS[facilityType];
+  if (!patterns) return 2;
+
+  for (const [period, config] of Object.entries(patterns)) {
+    if (currentHour >= config.start && currentHour < config.end) {
+      // 피크 시간대 중앙에 가까울수록 높은 레벨
+      const middle = (config.start + config.end) / 2;
+      const distance = Math.abs(currentHour - middle);
+      const maxDistance = (config.end - config.start) / 2;
+      const ratio = 1 - (distance / maxDistance);
+      
+      return Math.round(config.peakLevel * ratio) || 1;
+    }
+  }
+
+  return 1; // 운영시간 외
+}
+
+/**
+ * 자연스러운 변동 추가
+ */
+function addNaturalVariation(baseLevel, previousLevel = null) {
+  // 이전 레벨과 급격히 변하지 않도록
+  if (previousLevel !== null) {
+    const maxChange = 1;
+    const change = (Math.random() - 0.5) * 2 * maxChange;
+    const newLevel = previousLevel + change;
+    
+    // 기본 레벨 쪽으로 수렴
+    return Math.round((newLevel + baseLevel) / 2);
+  }
+
+  // 랜덤 변동 ±1
+  const variation = Math.floor(Math.random() * 3) - 1;
+  return Math.max(1, Math.min(5, baseLevel + variation));
+}
+
+/**
+ * 특정 시설의 실시간 혼잡도 생성
+ */
+export function generateCongestionData(facility, previousData = null) {
+  const now = new Date();
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+
+  // 시설 타입별 기본 혼잡도
+  const baseLevel = getBaseCongestion(facility.type, currentHour);
+
+  // 각 코너별 혼잡도 생성
+  const corners = facility.corners.map((corner, index) => {
+    const prevCorner = previousData?.corners?.[index];
+    const congestion = addNaturalVariation(baseLevel, prevCorner?.congestion);
+    
+    // 대기시간 계산
+    const queueCount = Math.floor(Math.random() * (congestion * 5));
+    const waitTime = calculateWaitTime(queueCount, facility.avgServiceTime || 3);
+
+    return {
+      id: corner.id,
+      type: corner.type,
+      menu: corner.menu,
+      price: corner.price,
+      congestion,
+      queueCount,
+      waitTime,
+      currentQueue: queueCount,
+      diningCount: Math.floor(Math.random() * (facility.capacity / facility.corners.length))
+    };
+  });
+
+  return {
+    facilityId: facility.id,
+    timestamp: now.toISOString(),
+    corners,
+    avgCongestion: Math.round(
+      corners.reduce((sum, c) => sum + c.congestion, 0) / corners.length
+    )
+  };
+}
+
+/**
+ * 대기시간 계산
+ */
+function calculateWaitTime(queueCount, avgServiceTime) {
+  if (queueCount === 0) return 0;
+  
+  // 기본: 대기 인원 × 평균 서비스 시간
+  const baseTime = queueCount * avgServiceTime;
+  
+  // 약간의 랜덤 변동 (-1 ~ +2분)
+  const variation = Math.floor(Math.random() * 4) - 1;
+  
+  return Math.max(1, baseTime + variation);
+}
+
+/**
+ * 시간대별 통계 데이터 생성 (차트용)
+ */
+export function generateHourlyData(facility, date = new Date()) {
+  const hourlyData = [];
+  
+  for (let hour = 9; hour <= 21; hour++) {
+    const baseLevel = getBaseCongestion(facility.type, hour);
+    const congestion = addNaturalVariation(baseLevel);
+    
+    hourlyData.push({
+      hour: `${hour}:00`,
+      congestion,
+      queueCount: congestion * 3,
+      label: getCongestionLabel(congestion)
+    });
+  }
+  
+  return hourlyData;
+}
+
+/**
+ * 혼잡도 레벨 → 텍스트 라벨
+ */
+function getCongestionLabel(level) {
+  const labels = {
+    1: '매우여유',
+    2: '여유',
+    3: '보통',
+    4: '혼잡',
+    5: '매우혼잡'
+  };
+  return labels[level] || '보통';
+}
+9.3 대기열 데이터 (로컬스토리지)
+javascript// utils/waitingQueue.js
+
+/**
+ * 대기 등록
+ */
+export function registerWaiting(facilityId, cornerId, cornerData) {
+  const waitingId = `waiting_${Date.now()}`;
+  const currentQueue = cornerData.queueCount || 0;
+  const waitingNumber = currentQueue + 1;
+
+  const waitingData = {
+    id: waitingId,
+    facilityId,
+    cornerId,
+    facilityName: cornerData.facilityName,
+    cornerType: cornerData.type,
+    menu: cornerData.menu,
+    waitingNumber,
+    currentCalling: Math.max(1, waitingNumber - currentQueue),
+    waitingAhead: currentQueue,
+    estimatedTime: cornerData.waitTime,
+    status: 'WAITING',
+    registeredAt: new Date().toISOString(),
+    calledAt: null,
+    enteredAt: null,
+    notified: {
+      threeBefore: false,
+      oneBefore: false,
+      called: false
+    }
+  };
+
+  // 로컬스토리지 저장
+  localStorage.setItem('activeWaiting', JSON.stringify(waitingData));
+  
+  // 히스토리 추가
+  addToHistory(waitingData);
+
+  return waitingData;
+}
+
+/**
+ * 활성 대기 조회
+ */
+export function getActiveWaiting() {
+  const data = localStorage.getItem('activeWaiting');
+  return data ? JSON.parse(data) : null;
+}
+
+/**
+ * 대기 업데이트 (시뮬레이션)
+ */
+export function updateWaiting(waitingData) {
+  // 30초마다 호출 번호 증가 (시뮬레이션)
+  const elapsed = Date.now() - new Date(waitingData.registeredAt).getTime();
+  const increments = Math.floor(elapsed / 30000); // 30초당 1번 증가
+  
+  const newCalling = waitingData.currentCalling + increments;
+  const newWaitingAhead = Math.max(0, waitingData.waitingNumber - newCalling);
+  
+  const updated = {
+    ...waitingData,
+    currentCalling: newCalling,
+    waitingAhead: newWaitingAhead,
+    estimatedTime: Math.max(0, Math.ceil(newWaitingAhead * 3))
+  };
+
+  // 알림 트리거
+  checkNotifications(updated);
+
+  // 호출됨
+  if (newCalling >= waitingData.waitingNumber) {
+    updated.status = 'CALLED';
+    updated.calledAt = new Date().toISOString();
+  }
+
+  localStorage.setItem('activeWaiting', JSON.stringify(updated));
+  return updated;
+}
+
+/**
+ * 대기 취소
+ */
+export function cancelWaiting(waitingId) {
+  const waiting = getActiveWaiting();
+  if (waiting && waiting.id === waitingId) {
+    waiting.status = 'CANCELLED';
+    waiting.cancelledAt = new Date().toISOString();
+    
+    addToHistory(waiting);
+    localStorage.removeItem('activeWaiting');
+    
+    return true;
+  }
+  return false;
+}
+
+/**
+ * 대기 완료 (입장)
+ */
+export function completeWaiting(waitingId) {
+  const waiting = getActiveWaiting();
+  if (waiting && waiting.id === waitingId) {
+    waiting.status = 'COMPLETED';
+    waiting.enteredAt = new Date().toISOString();
+    
+    addToHistory(waiting);
+    localStorage.removeItem('activeWaiting');
+    
+    return true;
+  }
+  return false;
+}
+
+/**
+ * 이용 내역 추가
+ */
+function addToHistory(waitingData) {
+  const history = JSON.parse(localStorage.getItem('waitingHistory') || '[]');
+  history.unshift({
+    ...waitingData,
+    id: waitingData.id,
+    date: new Date(waitingData.registeredAt).toLocaleDateString('ko-KR'),
+    statusText: getStatusText(waitingData.status)
+  });
+  
+  // 최근 20개만 유지
+  if (history.length > 20) {
+    history.splice(20);
+  }
+  
+  localStorage.setItem('waitingHistory', JSON.stringify(history));
+}
+
+/**
+ * 이용 내역 조회
+ */
+export function getWaitingHistory() {
+  return JSON.parse(localStorage.getItem('waitingHistory') || '[]');
+}
+
+/**
+ * 알림 체크 및 전송
+ */
+function checkNotifications(waiting) {
+  // 3번 전 알림
+  if (waiting.waitingAhead === 3 && !waiting.notified.threeBefore) {
+    sendNotification({
+      title: '줄없냥 알림',
+      body: '3번 전입니다! 곧 입장 준비해주세요.',
+      icon: '/icon-192.png',
+      tag: 'three-before'
+    });
+    waiting.notified.threeBefore = true;
+  }
+
+  // 1번 전 알림
+  if (waiting.waitingAhead === 1 && !waiting.notified.oneBefore) {
+    sendNotification({
+      title: '줄없냥 알림',
+      body: '1번 전입니다! 지금 이동해주세요.',
+      icon: '/icon-192.png',
+      tag: 'one-before'
+    });
+    waiting.notified.oneBefore = true;
+  }
+
+  // 호출 알림
+  if (waiting.waitingAhead === 0 && !waiting.notified.called) {
+    sendNotification({
+      title: '입장 호출!',
+      body: '지금 바로 입장해주세요. 5분 후 자동 취소됩니다.',
+      icon: '/icon-192.png',
+      tag: 'called',
+      requireInteraction: true
+    });
+    waiting.notified.called = true;
+  }
+}
+
+/**
+ * 푸시 알림 전송
+ */
+async function sendNotification(options) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification(options.title, options);
+    
+    // 진동
+    if ('vibrate' in navigator) {
+      navigator.vibrate([200, 100, 200]);
+    }
+  }
+}
+
+/**
+ * 상태 텍스트
+ */
+function getStatusText(status) {
+  const statusMap = {
+    'WAITING': '대기 중',
+    'CALLED': '호출됨',
+    'COMPLETED': '완료',
+    'CANCELLED': '취소',
+    'EXPIRED': '만료'
+  };
+  return statusMap[status] || status;
+}
+
+10. 백엔드 API (Express.js + WebSocket)
+javascript// server/index.js
+import express from 'express';
+import { createServer } from 'http';
+import { WebSocketServer } from 'ws';
+import cors from 'cors';
+import NodeCache from 'node-cache';
+import fs from 'fs/promises';
+
+const app = express();
+const server = createServer(app);
+const wss = new WebSocketServer({ server });
+
+// 미들웨어
+app.use(cors());
+app.use(express.json());
+
+// 캐시 (5분 TTL)
+const cache = new NodeCache({ stdTTL: 300 });
+
+// 정적 메뉴 데이터 로드
+let facilitiesData = null;
+async function loadFacilitiesData() {
+  const data = await fs.readFile('./data/facilities.json', 'utf-8');
+  facilitiesData = JSON.parse(data);
+  return facilitiesData;
+}
+
+// 혼잡도 시뮬레이터
+import { generateCongestionData, generateHourlyData } from '../utils/congestionSimulator.js';
+
+// ============================================
+// REST API
+// ============================================
+
+/**
+ * GET /api/facilities
+ * 전체 시설 목록 조회
+ */
+app.get('/api/facilities', async (req, res) => {
+  try {
+    if (!facilitiesData) {
+      await loadFacilitiesData();
+    }
+
+    // 캐시에서 혼잡도 데이터 가져오기
+    const facilitiesWithCongestion = facilitiesData.facilities.map(facility => {
+      const congestionData = cache.get(`congestion_${facility.id}`) || 
+                            generateCongestionData(facility);
+      
+      cache.set(`congestion_${facility.id}`, congestionData);
+
+      return {
+        ...facility,
+        congestion: congestionData,
+        corners: facility.corners.map(corner => {
+          const cornerCongestion = congestionData.corners.find(
+            c => c.id === corner.id
+          );
+          return {
+            ...corner,
+            ...cornerCongestion
+          };
+        })
+      };
+    });
+
+    res.json({
+      date: facilitiesData.date,
+      lastUpdate: new Date().toISOString(),
+      facilities: facilitiesWithCongestion
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/facilities/:id
+ * 특정 시설 상세 조회
+ */
+app.get('/api/facilities/:id', async (req, res) => {
+  try {
+    if (!facilitiesData) {
+      await loadFacilitiesData();
+    }
+
+    const facility = facilitiesData.facilities.find(
+      f => f.id === req.params.id
+    );
+
+    if (!facility) {
+      return res.status(404).json({ error: 'Facility not found' });
+    }
+
+    // 혼잡도 데이터
+    const congestionData = cache.get(`congestion_${facility.id}`) || 
+                          generateCongestionData(facility);
+    cache.set(`congestion_${facility.id}`, congestionData);
+
+    // 시간대별 데이터
+    const hourlyData = generateHourlyData(facility);
+
+    res.json({
+      ...facility,
+      congestion: congestionData,
+      hourlyData,
+      corners: facility.corners.map(corner => {
+        const cornerCongestion = congestionData.corners.find(
+          c => c.id === corner.id
+        );
+        return {
+          ...corner,
+          ...cornerCongestion
+        };
+      })
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/facilities/:id/hourly
+ * 시간대별 통계 조회
+ */
+app.get('/api/facilities/:id/hourly', async (req, res) => {
+  try {
+    if (!facilitiesData) {
+      await loadFacilitiesData();
+    }
+
+    const facility = facilitiesData.facilities.find(
+      f => f.id === req.params.id
+    );
+
+    if (!facility) {
+      return res.status(404).json({ error: 'Facility not found' });
+    }
+
+    const hourlyData = generateHourlyData(facility);
+    res.json({ hourlyData });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/waiting/register
+ * 대기 등록
+ */
+app.post('/api/waiting/register', async (req, res) => {
+  try {
+    const { facilityId, cornerId, userLocation } = req.body;
+
+    // 시설 조회
+    const facility = facilitiesData.facilities.find(f => f.id === facilityId);
+    if (!facility) {
+      return res.status(404).json({ error: 'Facility not found' });
+    }
+
+    // GPS 검증 (프로덕션에서는 서버에서 검증)
+    // 현재는 클라이언트 신뢰
+    const verified = true;
+
+    // 혼잡도 데이터
+    const congestionData = cache.get(`congestion_${facilityId}`);
+    const corner = congestionData.corners.find(c => c.id === cornerId);
+
+    if (!corner) {
+      return res.status(404).json({ error: 'Corner not found' });
+    }
+
+    // 대기번호 발급
+    const waitingNumber = corner.queueCount + 1;
+
+    res.json({
+      success: true,
+      waitingNumber,
+      currentCalling: Math.max(1, waitingNumber - corner.queueCount),
+      estimatedTime: corner.waitTime,
+      facilityName: facility.name,
+      cornerType: corner.type,
+      menu: corner.menu
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// WebSocket (실시간 혼잡도 스트리밍)
+// ============================================
+
+const clients = new Set();
+
+wss.on('connection', (ws) => {
+  console.log('Client connected');
+  clients.add(ws);
+
+  // 초기 데이터 전송
+  ws.on('message', async (message) => {
+    try {
+      const data = JSON.parse(message);
+      
+      if (data.type === 'subscribe') {
+        const facilityId = data.facilityId;
+        
+        // 구독 정보 저장
+        ws.facilityId = facilityId;
+        
+        // 즉시 현재 데이터 전송
+        const facility = facilitiesData.facilities.find(f => f.id === facilityId);
+        if (facility) {
+          const congestionData = generateCongestionData(facility);
+          cache.set(`congestion_${facilityId}`, congestionData);
+          
+          ws.send(JSON.stringify({
+            type: 'congestion_update',
+            data: congestionData
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('WebSocket message error:', error);
+    }
+  });
+
+  ws.on('close', () => {
+    console.log('Client disconnected');
+    clients.delete(ws);
+  });
+});
+
+// 5초마다 혼잡도 업데이트 브로드캐스트
+setInterval(async () => {
+  if (!facilitiesData) return;
+
+  for (const facility of facilitiesData.facilities) {
+    const previousData = cache.get(`congestion_${facility.id}`);
+    const newData = generateCongestionData(facility, previousData);
+    cache.set(`congestion_${facility.id}`, newData);
+
+    // 해당 시설을 구독 중인 클라이언트에게 전송
+    clients.forEach(client => {
+      if (client.readyState === 1 && client.facilityId === facility.id) {
+        client.send(JSON.stringify({
+          type: 'congestion_update',
+          data: newData
+        }));
+      }
+    });
+  }
+}, 5000);
+
+// ============================================
+// 서버 시작
+// ============================================
+
+const PORT = process.env.PORT || 3000;
+
+async function start() {
+  await loadFacilitiesData();
+  server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+start();
+
+11. 프론트엔드 Hooks
+11.1 실시간 혼잡도 훅
+javascript// hooks/useCongestion.js
+import { useState, useEffect } from 'react';
+
+export const useCongestion = (facilityId) => {
+  const [congestion, setCongestion] = useState(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!facilityId) return;
+
+    // WebSocket 연결
+    const ws = new WebSocket(`ws://localhost:3000`);
+    
+    ws.onopen = () => {
+      setIsConnected(true);
+      // 시설 구독
+      ws.send(JSON.stringify({
+        type: 'subscribe',
+        facilityId
+      }));
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        if (message.type === 'congestion_update') {
+          setCongestion(message.data);
+        }
+      } catch (err) {
+        setError(err.message);
+      }
+    };
+
+    ws.onerror = (err) => {
+      setError('WebSocket error');
+      setIsConnected(false);
+    };
+
+    ws.onclose = () => {
+      setIsConnected(false);
+    };
+
+    return () => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
+    };
+  }, [facilityId]);
+
+  return { congestion, isConnected, error };
+};
+
+// 전체 시설 목록용
+export const useAllFacilities = () => {
+  const [facilities, setFacilities] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchFacilities = async () => {
+      try {
+        const response = await fetch('http://localhost:3000/api/facilities');
+        if (!response.ok) throw new Error('Failed to fetch');
+        const data = await response.json();
+        setFacilities(data.facilities);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchFacilities();
+    
+    // 30초마다 폴링 (WebSocket 백업)
+    const interval = setInterval(fetchFacilities, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return { facilities, loading, error };
+};
+11.2 대기 관리 훅
+javascript// hooks/useWaiting.js
+import { useState, useEffect, useCallback } from 'react';
+import {
+  registerWaiting,
+  getActiveWaiting,
+  updateWaiting,
+  cancelWaiting,
+  completeWaiting,
+  getWaitingHistory
+} from '../utils/waitingQueue';
+
+export const useWaiting = () => {
+  const [activeWaiting, setActiveWaiting] = useState(null);
+  const [history, setHistory] = useState([]);
+
+  // 초기 로드
+  useEffect(() => {
+    const waiting = getActiveWaiting();
+    setActiveWaiting(waiting);
+    setHistory(getWaitingHistory());
+  }, []);
+
+  // 실시간 업데이트 (30초마다)
+  useEffect(() => {
+    if (!activeWaiting || activeWaiting.status !== 'WAITING') return;
+
+    const interval = setInterval(() => {
+      const updated = updateWaiting(activeWaiting);
+      setActiveWaiting(updated);
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [activeWaiting]);
+
+  // 대기 등록
+  const register = useCallback(async (facilityId, cornerId, cornerData) => {
+    try {
+      // 서버에 등록 요청
+      const response = await fetch('http://localhost:3000/api/waiting/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          facilityId,
+          cornerId,
+          userLocation: null // GPS는 클라이언트에서 검증됨
+        })
+      });
+
+      if (!response.ok) throw new Error('등록 실패');
+
+      const serverData = await response.json();
+
+      // 로컬에 저장
+      const waiting = registerWaiting(facilityId, cornerId, {
+        ...cornerData,
+        ...serverData
+      });
+
+      setActiveWaiting(waiting);
+      return waiting;
+    } catch (error) {
+      throw error;
+    }
+  }, []);
+
+  // 대기 취소
+  const cancel = useCallback((waitingId) => {
+    const success = cancelWaiting(waitingId);
+    if (success) {
+      setActiveWaiting(null);
+      setHistory(getWaitingHistory());
+    }
+    return success;
+  }, []);
+
+  // 입장 완료
+  const complete = useCallback((waitingId) => {
+    const success = completeWaiting(waitingId);
+    if (success) {
+      setActiveWaiting(null);
+      setHistory(getWaitingHistory());
+    }
+    return success;
+  }, []);
+
+  return {
+    activeWaiting,
+    history,
+    register,
+    cancel,
+    complete
+  };
+};
+11.3 GPS 위치 훅
+javascript// hooks/useLocation.js
+import { useState, useEffect } from 'react';
+
+export const useLocation = () => {
+  const [location, setLocation] = useState(null);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const requestLocation = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 5000,
+          maximumAge: 0
+        });
+      });
+
+      setLocation({
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+        accuracy: position.coords.accuracy
+      });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { location, error, loading, requestLocation };
+};
+
+// Haversine 거리 계산
+export const calculateDistance = (lat1, lng1, lat2, lng2) => {
+  const R = 6371e3; // 지구 반경 (미터)
+  const φ1 = lat1 * Math.PI / 180;
+  const φ2 = lat2 * Math.PI / 180;
+  const Δφ = (lat2 - lat1) * Math.PI / 180;
+  const Δλ = (lng2 - lng1) * Math.PI / 180;
+
+  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ/2) * Math.sin(Δλ/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+  return R * c; // 미터 단위
+};
+
+// 시설 근처 여부 확인
+export const isNearFacility = (userLat, userLng, facility, radius = 50) => {
+  const distance = calculateDistance(
+    userLat,
+    userLng,
+    facility.location.lat,
+    facility.location.lng
+  );
+  return distance <= (facility.location.radius || radius);
+};
+
+12. 하단 네비게이션
+jsx// components/BottomNav.jsx
+import { Home, Clock, User } from 'lucide-react';
+import { useLocation as useRouterLocation, Link } from 'react-router-dom';
+import { Badge } from '@/components/ui/badge';
+
+const BottomNav = ({ activeWaiting }) => {
+  const location = useRouterLocation();
+
+  const navItems = [
+    {
+      path: '/',
+      icon: Home,
+      label: '홈'
+    },
+    {
+      path: '/waiting',
+      icon: Clock,
+      label: '내 대기',
+      badge: activeWaiting ? '1' : null
+    },
+    {
+      path: '/my',
+      icon: User,
+      label: 'MY'
+    }
+  ];
+
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t z-50">
+      <div className="max-w-2xl mx-auto grid grid-cols-3">
+        {navItems.map(item => {
+          const Icon = item.icon;
+          const isActive = location.pathname === item.path;
+
+          return (
+            <Link
+              key={item.path}
+              to={item.path}
+              className={`flex flex-col items-center py-3 relative ${
+                isActive ? 'text-blue-600' : 'text-gray-600'
+              }`}
+            >
+              <div className="relative">
+                <Icon className={`w-6 h-6 ${isActive ? 'fill-current' : ''}`} />
+                {item.badge && (
+                  <Badge 
+                    variant="destructive" 
+                    className="absolute -top-2 -right-2 h-5 w-5 p-0 flex items-center justify-center text-xs"
+                  >
+                    {item.badge}
+                  </Badge>
+                )}
+              </div>
+              <span className={`text-xs mt-1 ${isActive ? 'font-semibold' : ''}`}>
+                {item.label}
+              </span>
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
+  );
+};
+
+export default BottomNav;
+
+13. PWA 설정
+13.1 manifest.json
+json{
+  "name": "줄없냥 - 한양대 혼잡도",
+  "short_name": "줄없냥",
+  "description": "한양대 캠퍼스 실시간 혼잡도 및 대기 관리",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3b82f6",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
+13.2 Service Worker (기본)
+javascript// public/sw.js
+const CACHE_NAME = 'juleobnyang-v1';
+const urlsToCache = [
+  '/',
+  '/index.html',
+  '/manifest.json'
+];
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(urlsToCache))
+  );
+});
+
+self.addEventListener('fetch', (event) => {
+  event.respondWith(
+    caches.match(event.request)
+      .then(response => response || fetch(event.request))
+  );
+});
+
+14. 디자인 시스템
+javascript// tailwind.config.js
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {
+      colors: {
+        primary: {
+          DEFAULT: '#3b82f6',
+          50: '#eff6ff',
+          100: '#dbeafe',
+          500: '#3b82f6',
+          600: '#2563eb',
+        },
+        congestion: {
+          1: '#10b981', // emerald-500
+          2: '#84cc16', // lime-500
+          3: '#eab308', // yellow-500
+          4: '#f97316', // orange-500
+          5: '#ef4444', // red-500
+        }
+      },
+      animation: {
+        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+      }
+    },
+  },
+  plugins: [],
+}
+```
+
+---
+
+## 15. 구현 순서
+
+### Phase 1: 프로젝트 셋업 (1일)
+1. ✅ Vite + React 프로젝트 생성
+2. ✅ Tailwind CSS + shadcn/ui 설치
+3. ✅ Express.js 백엔드 셋업
+4. ✅ 폴더 구조 설정
+5. ✅ 정적 메뉴 JSON 파일 작성
+
+### Phase 2: 기본 UI 구조 (2일)
+6. ✅ 레이아웃 (Header + Main + BottomNav)
+7. ✅ 홈 화면 기본 구조
+8. ✅ 시설 타입 필터 탭
+9. ✅ 혼잡도 카드 컴포넌트
+10. ✅ CongestionBar 컴포넌트
+
+### Phase 3: 데이터 연동 (1일)
+11. ✅ 시뮬레이션 로직 구현
+12. ✅ REST API 구현
+13. ✅ WebSocket 실시간 연동
+14. ✅ 프론트엔드 Hooks 작성
+
+### Phase 4: 대기 시스템 (2일)
+15. ✅ GPS 위치 인증
+16. ✅ 대기 등록 플로우 (모달)
+17. ✅ 내 대기 화면
+18. ✅ 대기 업데이트 로직
+19. ✅ 푸시 알림 구현
+
+### Phase 5: 상세 화면 & 마이페이지 (1일)
+20. ✅ 시설 상세 화면
+21. ✅ 시간대별 차트
+22. ✅ 마이페이지
+23. ✅ 이용 내역
+
+### Phase 6: 최적화 & 배포 (1일)
+24. ✅ 반응형 스타일 점검
+25. ✅ 애니메이션 추가
+26. ✅ PWA 설정
+27. ✅ 성능 최적화
+28. ✅ Replit 배포
+
+**총 예상 기간: 7-8일**
+
+---
+
+## 16. 파일 구조
+```
+juleobnyang/
+├── client/                    # 프론트엔드
+│   ├── public/
+│   │   ├── icon-192.png
+│   │   ├── icon-512.png
+│   │   ├── manifest.json
+│   │   └── sw.js
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── ui/           # shadcn/ui 컴포넌트
+│   │   │   ├── CongestionCard.jsx
+│   │   │   ├── CongestionBar.jsx
+│   │   │   ├── Header.jsx
+│   │   │   ├── BottomNav.jsx
+│   │   │   └── ...
+│   │   ├── pages/
+│   │   │   ├── Home.jsx
+│   │   │   ├── MyWaiting.jsx
+│   │   │   ├── FacilityDetail.jsx
+│   │   │   └── MyPage.jsx
+│   │   ├── hooks/
+│   │   │   ├── useCongestion.js
+│   │   │   ├── useWaiting.js
+│   │   │   └── useLocation.js
+│   │   ├── utils/
+│   │   │   ├── congestionSimulator.js
+│   │   │   ├── waitingQueue.js
+│   │   │   └── helpers.js
+│   │   ├── App.jsx
+│   │   └── main.jsx
+│   ├── package.json
+│   └── vite.config.js
+│
+├── server/                    # 백엔드
+│   ├── index.js
+│   ├── data/
+│   │   └── facilities.json   # 정적 메뉴 데이터
+│   └── package.json
+│
+└── README.md
+
+17. 주요 명령어
+bash# 프론트엔드 개발 서버
+cd client
+npm install
+npm run dev
+
+# 백엔드 서버
+cd server
+npm install
+npm start
+
+# 프로덕션 빌드
+cd client
+npm run build
+
+# 전체 실행 (Replit에서)
+npm start
+
+18. 추후 확장 계획 (Replit 외부)
+Phase 7: 실제 데이터 연동 (추후)
+
+ fnb.hanyang.ac.kr 크롤링 서버 구축
+ YOLO v11 Edge device 구축
+ 실제 CCTV RTSP 스트림 연동
+ 서버 사이드 GPS 검증
+ 한양대 SSO 연동
+
+
+산출물 요약
+✅ 완전히 작동하는 기능
+
+프론트엔드: React 기반 모바일 웹앱 (모든 화면 완성)
+혼잡도 시각화: 5단계 컬러 바, 실시간 업데이트
+대기 시스템: 등록/조회/취소/알림 전체 플로우
+GPS 인증: 프론트엔드 거리 계산
+실시간 통신: WebSocket 연결
+통계 차트: Recharts 시간대별 차트
+PWA: 홈 화면 추가, 오프라인 지원
+
+⚠️ 시뮬레이션 (실제 연동 대기)
+
+메뉴 데이터: 정적 JSON (크롤링 대기)
+혼잡도: 시간대 패턴 + 랜덤 (YOLO 대기)
+
+❌ 제외 (외부 시스템 필요)
+
+YOLO 실시간 영상 분석
+실제 CCTV 연동
+메뉴 크롤링
