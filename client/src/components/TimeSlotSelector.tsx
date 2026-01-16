@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Clock } from "lucide-react";
 import { isToday } from "date-fns";
 import { useRef, useEffect, useState } from "react";
+import { isMealTime, getMealPeriodName } from "@/lib/prediction";
 
 interface TimeSlotSelectorProps {
   selectedDate: Date;
@@ -9,12 +10,24 @@ interface TimeSlotSelectorProps {
   onTimeChange: (time: string) => void;
 }
 
-export function generateTimeSlots(): string[] {
+export function generateMealTimeSlots(): string[] {
   const slots: string[] = [];
-  for (let hour = 6; hour <= 22; hour++) {
+  
+  for (let hour = 7; hour < 9; hour++) {
     slots.push(`${hour.toString().padStart(2, "0")}:00`);
     slots.push(`${hour.toString().padStart(2, "0")}:30`);
   }
+  
+  for (let hour = 11; hour < 13; hour++) {
+    slots.push(`${hour.toString().padStart(2, "0")}:00`);
+    slots.push(`${hour.toString().padStart(2, "0")}:30`);
+  }
+  
+  for (let hour = 17; hour < 19; hour++) {
+    slots.push(`${hour.toString().padStart(2, "0")}:00`);
+    slots.push(`${hour.toString().padStart(2, "0")}:30`);
+  }
+  
   return slots;
 }
 
@@ -23,12 +36,37 @@ export function getCurrentTimeSlot(): string {
   const hour = now.getHours();
   const minute = now.getMinutes();
   const roundedMinute = minute < 30 ? "00" : "30";
-  return `${hour.toString().padStart(2, "0")}:${roundedMinute}`;
+  const currentSlot = `${hour.toString().padStart(2, "0")}:${roundedMinute}`;
+  
+  if (isMealTime(currentSlot)) {
+    return currentSlot;
+  }
+  
+  if (hour < 7) return "07:00";
+  if (hour >= 9 && hour < 11) return "11:00";
+  if (hour >= 13 && hour < 17) return "17:00";
+  if (hour >= 19) return "17:00";
+  
+  return "11:00";
+}
+
+export function getNextMealSlot(): string {
+  const now = new Date();
+  const hour = now.getHours();
+  
+  if (hour < 7) return "07:00";
+  if (hour < 9) return `${hour.toString().padStart(2, "0")}:${now.getMinutes() < 30 ? "00" : "30"}`;
+  if (hour < 11) return "11:00";
+  if (hour < 13) return `${hour.toString().padStart(2, "0")}:${now.getMinutes() < 30 ? "00" : "30"}`;
+  if (hour < 17) return "17:00";
+  if (hour < 19) return `${hour.toString().padStart(2, "0")}:${now.getMinutes() < 30 ? "00" : "30"}`;
+  
+  return "07:00";
 }
 
 export function TimeSlotSelector({ selectedDate, selectedTime, onTimeChange }: TimeSlotSelectorProps) {
   const isCurrentDate = isToday(selectedDate);
-  const slots = generateTimeSlots();
+  const slots = generateMealTimeSlots();
   const containerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
@@ -36,12 +74,23 @@ export function TimeSlotSelector({ selectedDate, selectedTime, onTimeChange }: T
   const [startX, setStartX] = useState(0);
   const [scrollLeftStart, setScrollLeftStart] = useState(0);
   
-  const currentTimeSlot = getCurrentTimeSlot();
-  const currentIndex = slots.indexOf(currentTimeSlot);
+  const now = new Date();
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+  const roundedMinute = currentMinute < 30 ? "00" : "30";
+  const actualCurrentSlot = `${currentHour.toString().padStart(2, "0")}:${roundedMinute}`;
+  const isActualCurrentSlotMealTime = isMealTime(actualCurrentSlot);
   
   const visibleSlots = isCurrentDate 
-    ? slots.slice(Math.max(0, currentIndex - 4))
+    ? slots.filter((slot) => {
+        const [h, m] = slot.split(":").map(Number);
+        const slotMinutes = h * 60 + m;
+        const nowMinutes = currentHour * 60 + currentMinute;
+        return slotMinutes >= nowMinutes - 30;
+      })
     : slots;
+  
+  const displaySlots = visibleSlots.length > 0 ? visibleSlots : slots;
 
   const updateScrollButtons = () => {
     if (containerRef.current) {
@@ -58,11 +107,11 @@ export function TimeSlotSelector({ selectedDate, selectedTime, onTimeChange }: T
       container.addEventListener("scroll", updateScrollButtons);
       return () => container.removeEventListener("scroll", updateScrollButtons);
     }
-  }, [visibleSlots]);
+  }, [displaySlots]);
 
   useEffect(() => {
     if (containerRef.current && isCurrentDate) {
-      const selectedIndex = visibleSlots.indexOf(selectedTime);
+      const selectedIndex = displaySlots.indexOf(selectedTime);
       if (selectedIndex > 0) {
         const buttonWidth = 68;
         const scrollPosition = Math.max(0, (selectedIndex - 1) * buttonWidth);
@@ -113,12 +162,14 @@ export function TimeSlotSelector({ selectedDate, selectedTime, onTimeChange }: T
     }
   };
 
+  const mealPeriod = getMealPeriodName(selectedTime);
+
   return (
     <div className="mb-4" data-testid="time-slot-selector">
       <div className="flex items-center gap-2 mb-2">
         <Clock className="w-4 h-4 text-muted-foreground" />
         <span className="text-sm font-medium">
-          {isCurrentDate ? "시간대별 예측 조회" : "예측 시간대 선택"}
+          {mealPeriod ? `${mealPeriod} 시간대` : "식사 시간대 선택"}
         </span>
       </div>
       <div className="relative flex items-center gap-1">
@@ -147,9 +198,10 @@ export function TimeSlotSelector({ selectedDate, selectedTime, onTimeChange }: T
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseLeave}
         >
-          {visibleSlots.map((slot) => {
-            const isCurrentSlot = isCurrentDate && slot === currentTimeSlot;
+          {displaySlots.map((slot) => {
+            const isCurrentSlot = isCurrentDate && isActualCurrentSlotMealTime && slot === actualCurrentSlot;
             const isSelected = slot === selectedTime;
+            const period = getMealPeriodName(slot);
             
             return (
               <Button

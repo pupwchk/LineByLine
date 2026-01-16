@@ -10,7 +10,7 @@ import { TimeSlotSelector, getCurrentTimeSlot } from "@/components/TimeSlotSelec
 import { useWaiting } from "@/context/WaitingContext";
 import { useFacilities } from "@/hooks/useFacilities";
 import { useDocumentTitle, useMetaDescription } from "@/hooks/useDocumentTitle";
-import { getPredictedFacility, shouldShowPrediction } from "@/lib/prediction";
+import { getPredictedFacility, shouldShowPrediction, isMealTime, getMealPeriodName } from "@/lib/prediction";
 import { format, isToday } from "date-fns";
 import { ko } from "date-fns/locale";
 import { Utensils, BookOpen, Dumbbell, Building, RefreshCw, TrendingUp } from "lucide-react";
@@ -36,15 +36,17 @@ export function HomePage({ selectedDate, onNavigateToWaiting, onNavigateToDetail
 
   const isTodayDate = isToday(selectedDate);
   const isPredictionMode = shouldShowPrediction(selectedDate, selectedTime);
+  const isCurrentMealTime = isMealTime(selectedTime);
+  const currentMealPeriod = getMealPeriodName(selectedTime);
 
   const facilities = data?.facilities || [];
   const lastUpdate = data?.lastUpdate
     ? format(new Date(data.lastUpdate), "HH:mm:ss", { locale: ko })
     : format(new Date(), "HH:mm:ss", { locale: ko });
 
-  const processedFacilities = facilities.map((facility) =>
-    getPredictedFacility(facility, selectedTime, selectedDate)
-  );
+  const processedFacilities = facilities
+    .map((facility) => getPredictedFacility(facility, selectedTime, selectedDate))
+    .filter((f): f is Facility => f !== null);
 
   const filteredFacilities = activeTab === "all"
     ? processedFacilities

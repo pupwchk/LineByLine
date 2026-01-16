@@ -71,9 +71,11 @@ Preferred communication style: Simple, everyday language.
 6. **Time Slot Predictions:** Added TimeSlotSelector component showing 30-minute interval time slots (6:00-22:00), with prediction mode for future time slots showing calculated congestion/wait times
 7. **Date-Aware Menu Display:** Future dates show "[음식메뉴] - 추후구현" placeholder with "가격 미정" pricing; registration disabled with "예약 불가" button
 8. **Prediction System:** client/src/lib/prediction.ts contains multiplier-based calculations for congestion predictions:
+   - **Meal times only**: Breakfast 7:00-9:00, Lunch 11:00-13:00, Dinner 17:00-19:00
+   - Non-meal time slots are not shown (TimeSlotSelector only displays meal time slots)
    - Lunch peak (12:00-12:30): multiplier 1.6, gradual increase from 11:00, decrease to 13:00
    - Dinner peak (18:00-18:30): multiplier 1.5, gradual increase from 17:00, decrease to 19:00
-   - Off-peak hours: 0.3-0.6 multipliers
+   - Breakfast: multiplier 0.8 (consistent)
    - Wait time = congestion × 4 minutes (synced calculation)
 9. **FacilityDetailPage Navigation:** Uses wouter's useLocation hook for back navigation; z-index fixes ensure back button is clickable above icon overlays
 
