@@ -32,6 +32,9 @@ export function TimeSlotSelector({ selectedDate, selectedTime, onTimeChange }: T
   const containerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeftStart, setScrollLeftStart] = useState(0);
   
   const currentTimeSlot = getCurrentTimeSlot();
   const currentIndex = slots.indexOf(currentTimeSlot);
@@ -78,6 +81,38 @@ export function TimeSlotSelector({ selectedDate, selectedTime, onTimeChange }: T
     }
   };
 
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!containerRef.current) return;
+    setIsDragging(true);
+    setStartX(e.pageX - containerRef.current.offsetLeft);
+    setScrollLeftStart(containerRef.current.scrollLeft);
+    containerRef.current.style.cursor = "grabbing";
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || !containerRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - containerRef.current.offsetLeft;
+    const walk = (x - startX) * 1.5;
+    containerRef.current.scrollLeft = scrollLeftStart - walk;
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+    if (containerRef.current) {
+      containerRef.current.style.cursor = "grab";
+    }
+  };
+
+  const handleMouseLeave = () => {
+    if (isDragging) {
+      setIsDragging(false);
+      if (containerRef.current) {
+        containerRef.current.style.cursor = "grab";
+      }
+    }
+  };
+
   return (
     <div className="mb-4" data-testid="time-slot-selector">
       <div className="flex items-center gap-2 mb-2">
@@ -100,12 +135,17 @@ export function TimeSlotSelector({ selectedDate, selectedTime, onTimeChange }: T
 
         <div 
           ref={containerRef}
-          className="flex gap-1.5 overflow-x-auto scrollbar-none flex-1 touch-pan-x"
+          className="flex gap-1.5 overflow-x-auto scrollbar-none flex-1 touch-pan-x select-none"
           style={{ 
             scrollbarWidth: "none", 
             msOverflowStyle: "none",
-            WebkitOverflowScrolling: "touch"
+            WebkitOverflowScrolling: "touch",
+            cursor: "grab"
           }}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseLeave}
         >
           {visibleSlots.map((slot) => {
             const isCurrentSlot = isCurrentDate && slot === currentTimeSlot;
@@ -116,8 +156,13 @@ export function TimeSlotSelector({ selectedDate, selectedTime, onTimeChange }: T
                 key={slot}
                 variant={isSelected ? "default" : "outline"}
                 size="sm"
-                className={`shrink-0 min-w-[60px] text-xs ${isCurrentSlot && !isSelected ? "ring-2 ring-primary ring-offset-1" : ""}`}
-                onClick={() => onTimeChange(slot)}
+                className={`shrink-0 min-w-[60px] text-xs pointer-events-auto ${isCurrentSlot && !isSelected ? "ring-2 ring-primary ring-offset-1" : ""}`}
+                onClick={(e) => {
+                  if (!isDragging) {
+                    onTimeChange(slot);
+                  }
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
                 data-testid={`button-timeslot-${slot.replace(":", "")}`}
               >
                 {slot}
