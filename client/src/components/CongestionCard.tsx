@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CongestionBar } from "./CongestionBar";
 import { getCongestionText } from "@/lib/mock-data";
+import { TrendingUp } from "lucide-react";
 import type { Corner, Facility } from "@shared/schema";
 
 interface CongestionCardProps {
@@ -10,11 +11,23 @@ interface CongestionCardProps {
   facility: Facility;
   onRegister: (corner: Corner, facility: Facility) => void;
   disabled?: boolean;
+  isFutureDate?: boolean;
+  isPrediction?: boolean;
 }
 
-export function CongestionCard({ corner, facility, onRegister, disabled }: CongestionCardProps) {
+export function CongestionCard({ 
+  corner, 
+  facility, 
+  onRegister, 
+  disabled,
+  isFutureDate = false,
+  isPrediction = false,
+}: CongestionCardProps) {
   const isFull = corner.congestion >= 5;
   const isLibraryOrGym = facility.type === "LIBRARY" || facility.type === "GYM";
+
+  const displayMenu = corner.menu || corner.name;
+  const isFutureDateMenu = corner.menu === "[음식메뉴] - 추후구현";
 
   return (
     <Card 
@@ -24,17 +37,30 @@ export function CongestionCard({ corner, facility, onRegister, disabled }: Conge
       <CardContent className="p-4">
         <div className="flex justify-between items-start gap-4 mb-3">
           <div className="flex-1 min-w-0">
-            <Badge variant="outline" className="mb-2 text-xs">
-              {corner.type}
-            </Badge>
-            {corner.menu ? (
+            <div className="flex items-center gap-1.5 mb-2">
+              <Badge variant="outline" className="text-xs">
+                {corner.type}
+              </Badge>
+              {isPrediction && (
+                <Badge variant="secondary" className="text-xs gap-0.5 py-0">
+                  <TrendingUp className="w-2.5 h-2.5" />
+                  예측
+                </Badge>
+              )}
+            </div>
+            {displayMenu ? (
               <>
                 <h3 className="font-semibold text-base mb-1 line-clamp-1" data-testid={`text-menu-${corner.id}`}>
-                  {corner.menu}
+                  {displayMenu}
                 </h3>
-                {corner.price !== undefined && (
+                {corner.price !== undefined && !isFutureDateMenu && (
                   <p className="text-sm text-muted-foreground">
                     {corner.price.toLocaleString()}원
+                  </p>
+                )}
+                {isFutureDateMenu && (
+                  <p className="text-sm text-muted-foreground">
+                    가격 미정
                   </p>
                 )}
               </>
@@ -49,6 +75,7 @@ export function CongestionCard({ corner, facility, onRegister, disabled }: Conge
             <CongestionBar level={corner.congestion} />
             <p className="text-xs mt-1.5 font-medium text-muted-foreground">
               {getCongestionText(corner.congestion)}
+              {isPrediction && <span className="ml-1 opacity-70">(예상)</span>}
             </p>
           </div>
         </div>
@@ -57,11 +84,11 @@ export function CongestionCard({ corner, facility, onRegister, disabled }: Conge
           {isLibraryOrGym ? (
             <p className="text-sm text-muted-foreground">
               <span className="font-semibold text-foreground">{corner.available}</span>
-              /{corner.capacity}석 이용가능
+              /{corner.capacity}석 {isPrediction ? "예상" : "이용가능"}
             </p>
           ) : (
             <p className="text-sm text-muted-foreground">
-              예상 대기: <span className="font-semibold text-foreground">{corner.waitTime}분</span>
+              {isPrediction ? "예상 대기" : "예상 대기"}: <span className="font-semibold text-foreground">{corner.waitTime}분</span>
             </p>
           )}
           
@@ -75,7 +102,7 @@ export function CongestionCard({ corner, facility, onRegister, disabled }: Conge
               disabled={disabled || isFull}
               data-testid={`button-register-${corner.id}`}
             >
-              {isFull ? "마감" : "대기 등록"}
+              {isFutureDate ? "예약 불가" : isFull ? "마감" : "대기 등록"}
             </Button>
           )}
         </div>

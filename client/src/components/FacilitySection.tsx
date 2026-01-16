@@ -1,4 +1,4 @@
-import { MapPin, Clock, ChevronRight } from "lucide-react";
+import { MapPin, Clock, ChevronRight, TrendingUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { CongestionCard } from "./CongestionCard";
 import { getFacilityLabel } from "@/lib/mock-data";
@@ -9,9 +9,18 @@ interface FacilitySectionProps {
   onRegister: (corner: Corner, facility: Facility) => void;
   onViewDetail: (facility: Facility) => void;
   hasActiveWaiting: boolean;
+  isFutureDate?: boolean;
+  isPrediction?: boolean;
 }
 
-export function FacilitySection({ facility, onRegister, onViewDetail, hasActiveWaiting }: FacilitySectionProps) {
+export function FacilitySection({ 
+  facility, 
+  onRegister, 
+  onViewDetail, 
+  hasActiveWaiting,
+  isFutureDate = false,
+  isPrediction = false,
+}: FacilitySectionProps) {
   return (
     <section className="mb-6" data-testid={`section-facility-${facility.id}`}>
       <div
@@ -27,6 +36,12 @@ export function FacilitySection({ facility, onRegister, onViewDetail, hasActiveW
           <Badge variant="secondary" className="text-xs">
             {getFacilityLabel(facility.type)}
           </Badge>
+          {isPrediction && (
+            <Badge variant="outline" className="text-xs gap-1">
+              <TrendingUp className="w-3 h-3" />
+              예측
+            </Badge>
+          )}
         </div>
         <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" />
       </div>
@@ -50,7 +65,9 @@ export function FacilitySection({ facility, onRegister, onViewDetail, hasActiveW
             corner={corner}
             facility={facility}
             onRegister={onRegister}
-            disabled={hasActiveWaiting}
+            disabled={hasActiveWaiting || isFutureDate}
+            isFutureDate={isFutureDate}
+            isPrediction={isPrediction}
           />
         ))}
       </div>

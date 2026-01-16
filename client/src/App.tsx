@@ -60,6 +60,7 @@ function AppContent() {
         <Switch>
           <Route path="/">
             <HomePage
+              selectedDate={currentDate}
               onNavigateToWaiting={handleNavigateToWaiting}
               onNavigateToDetail={(facility) => handleNavigateToDetail(facility.id)}
             />
@@ -80,6 +81,7 @@ function AppContent() {
           </Route>
           <Route>
             <HomePage
+              selectedDate={currentDate}
               onNavigateToWaiting={handleNavigateToWaiting}
               onNavigateToDetail={(facility) => handleNavigateToDetail(facility.id)}
             />
