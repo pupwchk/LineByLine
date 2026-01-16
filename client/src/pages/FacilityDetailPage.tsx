@@ -8,11 +8,11 @@ import { getCongestionText, generateHourlyData, getFacilityLabel } from "@/lib/m
 import { fetchFacility } from "@/lib/api";
 import { useDocumentTitle, useMetaDescription } from "@/hooks/useDocumentTitle";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 interface FacilityDetailPageProps {
   facilityId: string;
-  onBack: () => void;
 }
 
 const facilityIcons: Record<string, typeof Utensils> = {
@@ -22,11 +22,16 @@ const facilityIcons: Record<string, typeof Utensils> = {
   ETC: Building,
 };
 
-export function FacilityDetailPage({ facilityId, onBack }: FacilityDetailPageProps) {
+export function FacilityDetailPage({ facilityId }: FacilityDetailPageProps) {
+  const [, setLocation] = useLocation();
   const { data: facility, isLoading, error } = useQuery({
     queryKey: ["/api/facilities", facilityId],
     queryFn: () => fetchFacility(facilityId),
   });
+  
+  const handleBack = () => {
+    setLocation("/");
+  };
 
   useDocumentTitle(facility ? `${facility.name} - 줄없냥` : "시설 상세 - 줄없냥");
   useMetaDescription(facility ? `${facility.name}의 실시간 혼잡도와 대기 현황을 확인하세요.` : "시설 상세 정보를 확인하세요.");
@@ -64,7 +69,7 @@ export function FacilityDetailPage({ facilityId, onBack }: FacilityDetailPagePro
             variant="ghost"
             size="icon"
             className="absolute top-4 left-4 text-white"
-            onClick={onBack}
+            onClick={handleBack}
             data-testid="button-back"
           >
             <ChevronLeft className="w-6 h-6" />
@@ -72,7 +77,7 @@ export function FacilityDetailPage({ facilityId, onBack }: FacilityDetailPagePro
         </div>
         <div className="max-w-lg mx-auto px-4 py-4 text-center">
           <p className="text-destructive">시설 정보를 불러올 수 없습니다</p>
-          <Button variant="link" onClick={onBack} data-testid="button-go-back">
+          <Button variant="ghost" onClick={handleBack} data-testid="button-go-back">
             돌아가기
           </Button>
         </div>
@@ -85,18 +90,18 @@ export function FacilityDetailPage({ facilityId, onBack }: FacilityDetailPagePro
   return (
     <div className="pb-20" data-testid="page-facility-detail">
       <div className="relative h-48 bg-gradient-to-br from-primary to-primary/70">
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <FacilityIcon className="w-20 h-20 text-white/80" />
+        </div>
         <Button
           variant="ghost"
           size="icon"
-          className="absolute top-4 left-4 text-white"
-          onClick={onBack}
+          className="absolute top-4 left-4 text-white z-10"
+          onClick={handleBack}
           data-testid="button-back"
         >
           <ChevronLeft className="w-6 h-6" />
         </Button>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <FacilityIcon className="w-20 h-20 text-white/80" />
-        </div>
       </div>
 
       <div className="max-w-lg mx-auto px-4 py-4 space-y-4 -mt-6 relative">

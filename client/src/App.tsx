@@ -73,10 +73,7 @@ function AppContent() {
           </Route>
           <Route path="/facility/:id">
             {(params) => (
-              <FacilityDetailPage
-                facilityId={params.id}
-                onBack={() => setLocation("/")}
-              />
+              <FacilityDetailPage facilityId={params.id} />
             )}
           </Route>
           <Route>
