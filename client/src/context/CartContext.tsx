@@ -56,7 +56,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
             : i
         );
       }
-      return [...prev, { ...item, id: crypto.randomUUID(), quantity: 1 }];
+      const id = `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+      return [...prev, { ...item, id, quantity: 1 }];
     });
 
     setIsOpen(true);

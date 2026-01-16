@@ -18,10 +18,10 @@ interface PaymentDialogProps {
 }
 
 const PAYMENT_METHODS = [
-  { id: "kakao", name: "카카오페이", icon: Smartphone, color: "bg-yellow-400" },
-  { id: "toss", name: "토스페이", icon: Smartphone, color: "bg-blue-500" },
-  { id: "card", name: "신용/체크카드", icon: CreditCard, color: "bg-gray-500" },
-  { id: "bank", name: "계좌이체", icon: Building2, color: "bg-green-500" },
+  { id: "kakao", name: "카카오페이", icon: Smartphone, color: "bg-amber-400 dark:bg-amber-500" },
+  { id: "toss", name: "토스페이", icon: Smartphone, color: "bg-sky-500 dark:bg-sky-600" },
+  { id: "card", name: "신용/체크카드", icon: CreditCard, color: "bg-slate-500 dark:bg-slate-600" },
+  { id: "bank", name: "계좌이체", icon: Building2, color: "bg-emerald-500 dark:bg-emerald-600" },
 ];
 
 export function PaymentDialog({ open, onClose, pickupType, pickupTime }: PaymentDialogProps) {

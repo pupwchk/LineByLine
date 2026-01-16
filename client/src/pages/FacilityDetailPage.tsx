@@ -188,7 +188,6 @@ export function FacilityDetailPage({ facilityId }: FacilityDetailPageProps) {
                     </div>
                   </div>
                   <Button
-                    size="sm"
                     className="w-full mt-3"
                     onClick={() => handleAddToCart(corner)}
                     disabled={!corner.menu || !corner.price}

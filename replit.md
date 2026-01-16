@@ -15,7 +15,7 @@ Preferred communication style: Simple, everyday language.
 ### Frontend Architecture
 - **Framework:** React 18 with TypeScript, bundled via Vite
 - **Routing:** Wouter (lightweight client-side routing)
-- **State Management:** React Query for server state, React Context for local state (WaitingContext, ThemeContext)
+- **State Management:** React Query for server state, React Context for local state (WaitingContext, ThemeContext, CartContext)
 - **UI Components:** shadcn/ui component library with Radix UI primitives
 - **Styling:** Tailwind CSS with CSS variables for theming (light/dark mode support)
 - **Charts:** Recharts for time-series congestion visualization
@@ -59,6 +59,12 @@ Preferred communication style: Simple, everyday language.
 - `POST /api/waiting` - Register for queue
 - `DELETE /api/waiting` - Cancel queue registration
 - `GET /api/history` - User's waiting history
+- `POST /api/orders` - Create new order (meal ticket purchase)
+- `GET /api/orders` - Get user's orders
+- `GET /api/orders/:orderId` - Get specific order details
+- `POST /api/orders/:orderId/activate-qr` - Activate QR code (requires GPS location within 50m)
+- `POST /api/orders/:orderId/cancel` - Cancel order
+- `POST /api/orders/:orderId/complete` - Mark order as completed
 - `WebSocket /ws` - Real-time facility updates
 
 ## Recent Changes (January 2026)
@@ -78,6 +84,17 @@ Preferred communication style: Simple, everyday language.
    - Breakfast: multiplier 0.8 (consistent)
    - Wait time = congestion × 4 minutes (synced calculation)
 9. **FacilityDetailPage Navigation:** Uses wouter's useLocation hook for back navigation; z-index fixes ensure back button is clickable above icon overlays
+10. **Meal Ticket Ordering System (January 2026):**
+    - **Order Flow:** Menu selection → Cart → Payment → QR Activation
+    - **CartContext:** Manages cart state with facility info, items, quantities
+    - **CartSheet:** Bottom sheet for cart management with pickup time selection
+    - **PaymentDialog:** Mock payment with 4 methods (카카오페이, 토스페이, 카드, 계좌이체)
+    - **OrdersPage:** Lists purchased meal tickets with status badges
+    - **QRModal:** GPS-verified QR code activation with 3-minute countdown
+    - **Order Statuses:** PENDING, PAID, QR_ACTIVE, QR_EXPIRED, COMPLETED, CANCELLED
+    - **GPS Verification:** 50m radius check using Haversine formula
+    - **QR Expiration:** 10-second interval checker auto-expires QR codes
+    - **Bottom Nav:** Added "식권" (tickets) tab for easy access to orders
 
 ## External Dependencies
 
@@ -103,6 +120,9 @@ Preferred communication style: Simple, everyday language.
 
 ### Date/Time
 - **date-fns** - Date manipulation with Korean locale support
+
+### QR Code Generation
+- **qrcode** - QR code generation library for meal ticket display
 
 ### Korean Language Support
 - Application UI is in Korean

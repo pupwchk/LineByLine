@@ -29,8 +29,8 @@ export function BottomNav({ active, onChange, hasActiveWaiting, hasActiveOrders 
             onClick={() => onChange(item.id)}
             className={`flex flex-col items-center justify-center w-20 h-full gap-1 transition-colors ${
               active === item.id
-                ? "text-primary"
-                : "text-muted-foreground hover:text-foreground"
+                ? "text-foreground"
+                : "text-muted-foreground"
             }`}
             data-testid={`nav-${item.id}`}
           >
