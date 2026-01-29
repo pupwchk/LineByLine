@@ -13,7 +13,7 @@ export function WaitingTimeline({ steps }: WaitingTimelineProps) {
 	return (
 		<div className="space-y-0" data-testid="waiting-timeline">
 			{steps.map((step, index) => (
-				<div key={index} className="flex items-start gap-3">
+				<div key={`${step.status}-${step.label}`} className="flex items-start gap-3">
 					<div className="flex flex-col items-center">
 						<div
 							className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${

@@ -23,14 +23,10 @@ export function FacilitySection({
 }: FacilitySectionProps) {
 	return (
 		<section className="mb-6" data-testid={`section-facility-${facility.id}`}>
-			<div
-				role="button"
-				tabIndex={0}
+			<button
+				type="button"
 				className="w-full flex items-center justify-between mb-3 py-2 cursor-pointer hover-elevate active-elevate-2 rounded-md -mx-2 px-2"
 				onClick={() => onViewDetail(facility)}
-				onKeyDown={(e) => {
-					if (e.key === "Enter" || e.key === " ") onViewDetail(facility);
-				}}
 				data-testid={`button-view-facility-${facility.id}`}
 			>
 				<div className="flex items-center gap-2 flex-wrap text-left">
@@ -46,7 +42,7 @@ export function FacilitySection({
 					)}
 				</div>
 				<ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" />
-			</div>
+			</button>
 
 			<div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground">
 				<div className="flex items-center gap-1">

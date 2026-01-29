@@ -1,6 +1,6 @@
 import { isToday } from "date-fns";
 import { ChevronLeft, ChevronRight, Clock } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { getMealPeriodName, isMealTime } from "@/lib/prediction";
 
@@ -98,13 +98,13 @@ export function TimeSlotSelector({
 
 	const displaySlots = visibleSlots.length > 0 ? visibleSlots : slots;
 
-	const updateScrollButtons = () => {
+	const updateScrollButtons = useCallback(() => {
 		if (containerRef.current) {
 			const { scrollLeft, scrollWidth, clientWidth } = containerRef.current;
 			setCanScrollLeft(scrollLeft > 5);
 			setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 5);
 		}
-	};
+	}, []);
 
 	useEffect(() => {
 		updateScrollButtons();
@@ -190,6 +190,7 @@ export function TimeSlotSelector({
 					<ChevronLeft className="w-4 h-4" />
 				</Button>
 
+				{/* biome-ignore lint/a11y/noStaticElementInteractions: drag-to-scroll container, interactive buttons inside */}
 				<div
 					ref={containerRef}
 					className="flex gap-1.5 overflow-x-auto scrollbar-none flex-1 touch-pan-x select-none"

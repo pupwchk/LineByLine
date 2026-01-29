@@ -8,8 +8,9 @@ interface ActiveWaitingBannerProps {
 
 export function ActiveWaitingBanner({ waiting, onClick }: ActiveWaitingBannerProps) {
 	return (
-		<div
-			className="bg-primary/10 border-l-4 border-primary p-4 mb-4 cursor-pointer hover:bg-primary/15 transition-colors rounded-r-md"
+		<button
+			type="button"
+			className="w-full text-left bg-primary/10 border-l-4 border-primary p-4 mb-4 cursor-pointer hover:bg-primary/15 transition-colors rounded-r-md"
 			onClick={onClick}
 			data-testid="banner-active-waiting"
 		>
@@ -29,6 +30,6 @@ export function ActiveWaitingBanner({ waiting, onClick }: ActiveWaitingBannerPro
 				</div>
 				<ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" />
 			</div>
-		</div>
+		</button>
 	);
 }
